@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .tle_ingestor import TLEIngestor
 
 
 ingestor = TLEIngestor()
+CLIENT_DIR = Path(__file__).parent.parent / "client"
 
 
 @asynccontextmanager
@@ -43,3 +46,6 @@ async def get_tle():
 @app.get("/api/health")
 async def health():
     return {"status": "NOMINAL"}
+
+
+app.mount("/", StaticFiles(directory=str(CLIENT_DIR), html=True), name="client")
