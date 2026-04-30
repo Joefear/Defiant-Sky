@@ -1,0 +1,90 @@
+:root {
+  --background: #1A1A2E;
+  --panel: #101625;
+  --panel-border: #25334F;
+  --text: #E8F4FD;
+  --muted: #A8C7E8;
+}
+
+html,
+body,
+#app,
+#cesiumContainer {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  letter-spacing: 0;
+}
+
+#app {
+  position: relative;
+}
+
+#cesiumContainer {
+  background: #050711;
+}
+
+.cesium-viewer,
+.cesium-viewer-cesiumWidgetContainer,
+.cesium-widget,
+.cesium-widget canvas {
+  width: 100%;
+  height: 100%;
+}
+
+#statusBar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(16, 22, 37, 0.94);
+  color: var(--text);
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+#statusBar span {
+  white-space: nowrap;
+}
+
+#statusBar strong,
+#statusBar time {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.cesium-viewer-bottom,
+.cesium-viewer-toolbar,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer {
+  display: none !important;
+}
+
+@media (max-width: 720px) {
+  #statusBar {
+    gap: 4px 14px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  #statusBar span {
+    white-space: normal;
+  }
+}

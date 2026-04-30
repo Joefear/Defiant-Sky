@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Space Domain Awareness</title>
+    <link
+      rel="stylesheet"
+      href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <div id="cesiumContainer"></div>
+      <section id="statusBar" aria-live="polite">
+        <span>Data Source: Space-Track.org</span>
+        <span>Last Updated: <time id="lastUpdated">INITIALIZING</time></span>
+        <span>Objects Tracked: <strong id="objectCount">0</strong></span>
+        <span>System Status: <strong id="systemStatus">NOMINAL</strong></span>
+      </section>
+    </main>
+
+    <script>
+      window.CESIUM_BASE_URL =
+        "https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/";
+    </script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+    <script src="./main.js"></script>
+  </body>
+</html>
