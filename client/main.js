@@ -25,12 +25,18 @@
   const auditTimestampElement = document.getElementById("auditTimestamp");
   const auditDecisionIdElement = document.getElementById("auditDecisionId");
   const auditFingerprintElement = document.getElementById("auditFingerprint");
+  const operatorPanelElement = document.getElementById("operatorPanel");
+  const operatorRsoNameElement = document.getElementById("operatorRsoName");
+  const operatorActionLogElement = document.getElementById("operatorActionLog");
+  const operatorActionButtonElements = document.querySelectorAll(".operatorActionButton");
 
   const trackedObjects = [];
   let anomalyTarget = null;
   let anomalyScheduled = false;
   let anomalyTriggered = false;
   let guardrailEvaluationRequested = false;
+  let operatorPanelScheduled = false;
+  let operatorPanelShown = false;
   let guardrailResult = null;
 
   Cesium.Ion.defaultAccessToken = "";
@@ -164,6 +170,7 @@
     guardrailEvaluationRequested = true;
     governancePanelElement.style.display = "block";
     auditTraceButtonElement.style.display = "inline-block";
+    scheduleOperatorPanel();
     setGovernanceDecision("EVALUATING");
 
     try {
@@ -224,6 +231,33 @@
     auditTraceOverlayElement.style.display = "none";
   }
 
+  function scheduleOperatorPanel() {
+    if (operatorPanelScheduled || operatorPanelShown) {
+      return;
+    }
+
+    operatorPanelScheduled = true;
+    window.setTimeout(showOperatorPanel, 2000);
+  }
+
+  function showOperatorPanel() {
+    if (operatorPanelShown || !anomalyTarget) {
+      return;
+    }
+
+    operatorPanelShown = true;
+    operatorRsoNameElement.textContent = anomalyTarget.entity.name || "UNKNOWN";
+    operatorPanelElement.style.display = "block";
+  }
+
+  function handleOperatorAction(action) {
+    const timestamp = new Date().toISOString();
+    const rsoName = anomalyTarget?.entity.name || "UNKNOWN";
+
+    operatorActionLogElement.textContent = `→ ${action} logged ${timestamp}`;
+    console.log(`OPERATOR ACTION: ${action} | RSO: ${rsoName} | ${timestamp}`);
+  }
+
   function setGovernanceDecision(action) {
     const normalizedAction = String(action || "UNKNOWN").toLowerCase();
     const decisionMap = {
@@ -278,6 +312,9 @@
   auditTraceCloseElement.addEventListener("click", hideAuditTrace);
   auditTraceOverlayElement.addEventListener("click", hideAuditTrace);
   auditTracePanelElement.addEventListener("click", (event) => event.stopPropagation());
+  operatorActionButtonElements.forEach((button) => {
+    button.addEventListener("click", () => handleOperatorAction(button.dataset.action));
+  });
   window.setInterval(updateSatellitePositions, UPDATE_INTERVAL_MS);
   window.setInterval(loadTleData, 10 * 60 * 1000);
 })();
