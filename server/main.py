@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 import sys
 
@@ -7,7 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-GUARDRAIL_PATH = Path("C:/Users/samcf/Desktop/Dev/defiant-guardrail/packages/guardrail-core-python")
+GUARDRAIL_PATH = Path(
+    os.getenv(
+        "GUARDRAIL_PATH",
+        "C:/Users/samcf/Desktop/Dev/defiant-guardrail/packages/guardrail-core-python",
+    )
+)
 if str(GUARDRAIL_PATH) not in sys.path:
     sys.path.insert(0, str(GUARDRAIL_PATH))
 
