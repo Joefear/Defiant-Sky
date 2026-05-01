@@ -3,12 +3,20 @@
   const UPDATE_INTERVAL_MS = 2000;
   const LIGHT_BLUE = "#E8F4FD";
   const ALERT_RED = "#FF5C5C";
+  const ALERT_YELLOW = "#FFC300";
+  const SATELLITE_WHITE = "#FFFFFF";
 
   const lastUpdatedElement = document.getElementById("lastUpdated");
   const objectCountElement = document.getElementById("objectCount");
   const systemStatusElement = document.getElementById("systemStatus");
+  const anomalyAlertElement = document.getElementById("anomalyAlert");
+  const anomalyRsoElement = document.getElementById("anomalyRso");
+  const anomalyTimeElement = document.getElementById("anomalyTime");
 
   const trackedObjects = [];
+  let anomalyTarget = null;
+  let anomalyScheduled = false;
+  let anomalyTriggered = false;
 
   Cesium.Ion.defaultAccessToken = "";
 
@@ -65,7 +73,7 @@
           name: tle.name,
           position: Cesium.Cartesian3.ZERO,
           point: {
-            color: Cesium.Color.fromCssColorString(LIGHT_BLUE),
+            color: Cesium.Color.fromCssColorString(SATELLITE_WHITE),
             pixelSize: 7,
             outlineColor: Cesium.Color.fromCssColorString("#0A0F1F"),
             outlineWidth: 1,
@@ -86,6 +94,7 @@
       });
 
       updateSatellitePositions();
+      scheduleAnomalyTrigger();
       objectCountElement.textContent = String(trackedObjects.length);
       lastUpdatedElement.textContent = new Date().toISOString();
       setStatus("NOMINAL", LIGHT_BLUE);
@@ -100,6 +109,30 @@
     trackedObjects.forEach(({ entity }) => viewer.entities.remove(entity));
     trackedObjects.length = 0;
     objectCountElement.textContent = "0";
+  }
+
+  function scheduleAnomalyTrigger() {
+    if (anomalyScheduled || anomalyTriggered || trackedObjects.length === 0) {
+      return;
+    }
+
+    anomalyTarget = trackedObjects[0];
+    anomalyScheduled = true;
+    window.setTimeout(triggerAnomaly, 10000);
+  }
+
+  function triggerAnomaly() {
+    if (anomalyTriggered || !anomalyTarget) {
+      return;
+    }
+
+    anomalyTriggered = true;
+    anomalyTarget.entity.point.color = Cesium.Color.fromCssColorString(ALERT_YELLOW);
+    anomalyTarget.entity.point.pixelSize = 10;
+
+    anomalyRsoElement.textContent = anomalyTarget.entity.name || "UNKNOWN";
+    anomalyTimeElement.textContent = new Date().toISOString();
+    anomalyAlertElement.style.display = "block";
   }
 
   function updateSatellitePositions() {
