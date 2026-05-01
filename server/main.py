@@ -80,7 +80,7 @@ async def evaluate_guardrail(classification_input: ClassificationInput):
                 f"risk {classification_input.risk_category}"
             ),
             policy_pack=None,
-            policy_files=["default.yml"],
+            policy_files=["sda-ops-v1.yml"],
             mode="action",
             requested_tool_name="sda_anomaly_response",
             requested_command=None,
