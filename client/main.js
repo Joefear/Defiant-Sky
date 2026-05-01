@@ -17,12 +17,21 @@
   const governancePanelElement = document.getElementById("governancePanel");
   const governanceDecisionElement = document.getElementById("governanceDecision");
   const governanceTraceElement = document.getElementById("governanceTrace");
+  const auditTraceButtonElement = document.getElementById("auditTraceButton");
+  const auditTraceOverlayElement = document.getElementById("auditTraceOverlay");
+  const auditTracePanelElement = document.getElementById("auditTracePanel");
+  const auditTraceCloseElement = document.getElementById("auditTraceClose");
+  const auditTraceIdElement = document.getElementById("auditTraceId");
+  const auditTimestampElement = document.getElementById("auditTimestamp");
+  const auditDecisionIdElement = document.getElementById("auditDecisionId");
+  const auditFingerprintElement = document.getElementById("auditFingerprint");
 
   const trackedObjects = [];
   let anomalyTarget = null;
   let anomalyScheduled = false;
   let anomalyTriggered = false;
   let guardrailEvaluationRequested = false;
+  let guardrailResult = null;
 
   Cesium.Ion.defaultAccessToken = "";
 
@@ -154,6 +163,7 @@
 
     guardrailEvaluationRequested = true;
     governancePanelElement.style.display = "block";
+    auditTraceButtonElement.style.display = "inline-block";
     setGovernanceDecision("EVALUATING");
 
     try {
@@ -175,14 +185,43 @@
         throw new Error(`Guardrail request failed with ${response.status}`);
       }
 
-      const result = await response.json();
-      setGovernanceDecision(result.action || "UNKNOWN");
-      governanceTraceElement.textContent = result.trace_id || "UNKNOWN";
+      guardrailResult = await response.json();
+      setGovernanceDecision(guardrailResult.action || "UNKNOWN");
+      governanceTraceElement.textContent = guardrailResult.trace_id || "UNKNOWN";
+      populateAuditTrace();
     } catch (error) {
       console.error(error);
+      guardrailResult = {
+        action: "block",
+        trace_id: "ERROR",
+        created_at: new Date().toISOString(),
+        decision_id: "ERROR",
+      };
       setGovernanceDecision("block");
       governanceTraceElement.textContent = "ERROR";
+      populateAuditTrace();
     }
+  }
+
+  function populateAuditTrace() {
+    const traceId = guardrailResult?.trace_id || "PENDING";
+    auditTraceIdElement.textContent = traceId;
+    auditTimestampElement.textContent = guardrailResult?.created_at || "PENDING";
+    auditDecisionIdElement.textContent = guardrailResult?.decision_id || "PENDING";
+    auditFingerprintElement.textContent = `Fingerprint: SHA-256 / ${traceId.slice(0, 16)}...`;
+  }
+
+  function showAuditTrace() {
+    if (!guardrailEvaluationRequested) {
+      return;
+    }
+
+    populateAuditTrace();
+    auditTraceOverlayElement.style.display = "flex";
+  }
+
+  function hideAuditTrace() {
+    auditTraceOverlayElement.style.display = "none";
   }
 
   function setGovernanceDecision(action) {
@@ -235,6 +274,10 @@
   }
 
   loadTleData();
+  auditTraceButtonElement.addEventListener("click", showAuditTrace);
+  auditTraceCloseElement.addEventListener("click", hideAuditTrace);
+  auditTraceOverlayElement.addEventListener("click", hideAuditTrace);
+  auditTracePanelElement.addEventListener("click", (event) => event.stopPropagation());
   window.setInterval(updateSatellitePositions, UPDATE_INTERVAL_MS);
   window.setInterval(loadTleData, 10 * 60 * 1000);
 })();
