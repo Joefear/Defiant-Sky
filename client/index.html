@@ -50,6 +50,45 @@
         <div style="border-top: 1px solid #2C3E7A; margin-top: 12px; margin-bottom: 8px;"></div>
         <div style="color: #AAAAAA; font-size: 10px; font-style: italic;">Model: Local — Offline Execution</div>
       </aside>
+      <aside
+        id="governancePanel"
+        style="display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 20; width: 520px; background: #1A1A2E; border: 2px solid #2C3E7A; padding: 16px; font-family: Arial, Helvetica, sans-serif; box-sizing: border-box; line-height: 1.45;"
+        aria-live="polite"
+      >
+        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px;">
+          <div style="color: #AAAAAA; font-size: 11px; letter-spacing: 2px;">POLICY EVALUATION</div>
+          <div style="color: #2C3E7A; font-size: 11px;">Guardrail Layer</div>
+        </div>
+        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
+        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Policy Pack</div>
+          <div style="color: #E8F4FD; font-size: 12px;">SDA-OPS v1.0</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Input</div>
+          <div style="color: #E8F4FD; font-size: 12px;">AI Classification Result</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Context</div>
+          <div style="color: #E8F4FD; font-size: 12px;">LEO / Non-Cooperative Object</div>
+        </div>
+        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
+        <div style="color: #4CAF50; font-size: 12px; margin-bottom: 6px;">✔ Classification Confidence &gt; Threshold</div>
+        <div style="color: #4CAF50; font-size: 12px; margin-bottom: 6px;">✔ Maneuver Type Allowed for Monitoring</div>
+        <div style="color: #FFC300; font-size: 12px; margin-bottom: 12px;">⚠ Operator Notification Required</div>
+        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
+        <div style="display: flex; gap: 8px; align-items: baseline;">
+          <span style="color: #AAAAAA; font-size: 12px;">Decision:</span>
+          <span id="governanceDecision" style="color: #AAAAAA; font-size: 13px; font-weight: bold;">PENDING</span>
+        </div>
+        <div style="background: rgba(0,0,0,0.3); padding: 10px; margin-top: 8px; margin-bottom: 10px;">
+          <div style="color: #AAAAAA; font-size: 11px; margin-bottom: 6px;">Action:</div>
+          <div style="color: #E8F4FD; font-size: 12px;">- Allow classification visibility</div>
+          <div style="color: #E8F4FD; font-size: 12px;">- Require operator review before escalation</div>
+          <div style="color: #E8F4FD; font-size: 12px;">- Log full audit trace</div>
+        </div>
+        <div style="color: #AAAAAA; font-size: 10px; font-style: italic;">Trace ID: <span id="governanceTrace">PENDING</span></div>
+      </aside>
       <section id="statusBar" aria-live="polite">
         <span>Data Source: Space-Track.org</span>
         <span>Last Updated: <time id="lastUpdated">INITIALIZING</time></span>

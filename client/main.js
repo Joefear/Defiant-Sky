@@ -1,5 +1,6 @@
 (function () {
   const API_URL = "http://localhost:8000/api/tle";
+  const GUARDRAIL_API_URL = "http://localhost:8000/api/guardrail/evaluate";
   const UPDATE_INTERVAL_MS = 2000;
   const LIGHT_BLUE = "#E8F4FD";
   const ALERT_RED = "#FF5C5C";
@@ -13,11 +14,15 @@
   const anomalyRsoElement = document.getElementById("anomalyRso");
   const anomalyTimeElement = document.getElementById("anomalyTime");
   const aiAnalysisPanelElement = document.getElementById("aiAnalysisPanel");
+  const governancePanelElement = document.getElementById("governancePanel");
+  const governanceDecisionElement = document.getElementById("governanceDecision");
+  const governanceTraceElement = document.getElementById("governanceTrace");
 
   const trackedObjects = [];
   let anomalyTarget = null;
   let anomalyScheduled = false;
   let anomalyTriggered = false;
+  let guardrailEvaluationRequested = false;
 
   Cesium.Ion.defaultAccessToken = "";
 
@@ -139,6 +144,62 @@
 
   function showAiAnalysisPanel() {
     aiAnalysisPanelElement.style.display = "block";
+    window.setTimeout(evaluateGuardrailPolicy, 1000);
+  }
+
+  async function evaluateGuardrailPolicy() {
+    if (guardrailEvaluationRequested || !anomalyTarget) {
+      return;
+    }
+
+    guardrailEvaluationRequested = true;
+    governancePanelElement.style.display = "block";
+    setGovernanceDecision("EVALUATING");
+
+    try {
+      const response = await fetch(GUARDRAIL_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rso_name: anomalyTarget.entity.name || "UNKNOWN",
+          classification: "Unscheduled Maneuver",
+          confidence: 87.4,
+          risk_category: "MODERATE",
+          policy_pack: "default.yml",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Guardrail request failed with ${response.status}`);
+      }
+
+      const result = await response.json();
+      setGovernanceDecision(result.action || "UNKNOWN");
+      governanceTraceElement.textContent = result.trace_id || "UNKNOWN";
+    } catch (error) {
+      console.error(error);
+      setGovernanceDecision("block");
+      governanceTraceElement.textContent = "ERROR";
+    }
+  }
+
+  function setGovernanceDecision(action) {
+    const normalizedAction = String(action || "UNKNOWN").toLowerCase();
+    const decisionMap = {
+      allow: { label: "ALLOW", color: "#4CAF50" },
+      modify: { label: "MODIFY", color: "#FFC300" },
+      require_approval: { label: "MODIFY", color: "#FFC300" },
+      block: { label: "BLOCK", color: "#FF5252" },
+    };
+    const decision = decisionMap[normalizedAction] || {
+      label: String(action || "UNKNOWN").toUpperCase(),
+      color: "#E8F4FD",
+    };
+
+    governanceDecisionElement.textContent = decision.label;
+    governanceDecisionElement.style.color = decision.color;
   }
 
   function updateSatellitePositions() {
