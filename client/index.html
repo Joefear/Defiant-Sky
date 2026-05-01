@@ -24,6 +24,32 @@
         <div style="color: #FFC300;">Status: MONITORING</div>
         <div style="color: #AAAAAA; font-size: 11px;">Time: <span id="anomalyTime">PENDING</span></div>
       </aside>
+      <aside
+        id="aiAnalysisPanel"
+        style="display: none; position: fixed; left: 18px; top: 50%; transform: translateY(-50%); z-index: 20; background: #1A1A2E; border: 2px solid #2C3E7A; padding: 16px; width: 280px; font-family: Arial, Helvetica, sans-serif; box-sizing: border-box;"
+        aria-live="polite"
+      >
+        <div style="color: #2C3E7A; font-size: 11px; letter-spacing: 2px; margin-bottom: 12px;">AI ANALYSIS</div>
+        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
+        <div style="margin-bottom: 10px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Classification</div>
+          <div style="color: #E8F4FD; font-size: 13px; font-weight: bold;">Unscheduled Maneuver</div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Confidence</div>
+          <div style="color: #E8F4FD; font-size: 13px; font-weight: bold;">87.4%</div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Behavior Model</div>
+          <div style="color: #E8F4FD; font-size: 13px; font-weight: bold;">Propulsive Adjustment</div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <div style="color: #AAAAAA; font-size: 11px;">Risk Category</div>
+          <div style="color: #FFC300; font-size: 13px; font-weight: bold;">MODERATE</div>
+        </div>
+        <div style="border-top: 1px solid #2C3E7A; margin-top: 12px; margin-bottom: 8px;"></div>
+        <div style="color: #AAAAAA; font-size: 10px; font-style: italic;">Model: Local — Offline Execution</div>
+      </aside>
       <section id="statusBar" aria-live="polite">
         <span>Data Source: Space-Track.org</span>
         <span>Last Updated: <time id="lastUpdated">INITIALIZING</time></span>

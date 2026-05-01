@@ -12,6 +12,7 @@
   const anomalyAlertElement = document.getElementById("anomalyAlert");
   const anomalyRsoElement = document.getElementById("anomalyRso");
   const anomalyTimeElement = document.getElementById("anomalyTime");
+  const aiAnalysisPanelElement = document.getElementById("aiAnalysisPanel");
 
   const trackedObjects = [];
   let anomalyTarget = null;
@@ -133,6 +134,11 @@
     anomalyRsoElement.textContent = anomalyTarget.entity.name || "UNKNOWN";
     anomalyTimeElement.textContent = new Date().toISOString();
     anomalyAlertElement.style.display = "block";
+    window.setTimeout(showAiAnalysisPanel, 3000);
+  }
+
+  function showAiAnalysisPanel() {
+    aiAnalysisPanelElement.style.display = "block";
   }
 
   function updateSatellitePositions() {
