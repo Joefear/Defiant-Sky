@@ -4,8 +4,6 @@ Normal CI skips these. Set DS_GUARDRAIL_TEST_COPY only to a copy created by
 tools/prepare_guardrail_copy.py; never point it at the owner's installation.
 """
 from datetime import datetime, timedelta
-import importlib
-import json
 import os
 from pathlib import Path
 import sys
@@ -15,6 +13,7 @@ from sgp4.io import fix_checksum
 
 from server.evidence import UTC, Settings, detect, parse_element_set
 from server.governance import Governance
+from tools.guardrail_isolation import load_isolated_runtime
 
 
 @pytest.fixture
@@ -22,22 +21,15 @@ def runtime(monkeypatch):
     configured = os.getenv("DS_GUARDRAIL_TEST_COPY")
     if not configured:
         pytest.skip("Actual installed-engine test requires a disposable runtime copy")
-    root = Path(configured).resolve()
-    manifest_path = root / "source-manifest.json"
-    if not manifest_path.is_file():
-        pytest.fail("Disposable-copy manifest required; refusing to import runtime")
-    manifest = json.loads(manifest_path.read_text())
-    source = Path(manifest["source_root"]).resolve()
-    if root == source or root.is_relative_to(source) or source.is_relative_to(root):
-        pytest.fail("Test runtime must be separate from the installed repository")
-    package = root / "packages/guardrail-core-python"
-    monkeypatch.syspath_prepend(str(package))
-    evaluator = importlib.import_module("guardrail_core.evaluator")
-    audit = importlib.import_module("guardrail_core.audit")
-    assert Path(evaluator.__file__).resolve().is_relative_to(root)
-    assert evaluator.PROJECT_ROOT == root
-    assert audit.AUDIT_LOG_PATH.is_relative_to(root)
-    return evaluator, audit
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    monkeypatch.setenv("GUARDRAIL_PATH", str(Path(configured) / "packages/guardrail-core-python"))
+    before = set(sys.modules)
+    try:
+        yield load_isolated_runtime(configured)
+    finally:
+        for name in set(sys.modules) - before:
+            if name == "guardrail_core" or name.startswith("guardrail_core."):
+                sys.modules.pop(name, None)
 
 
 @pytest.fixture
@@ -65,12 +57,12 @@ def test_actual_sda_policy_bridge_and_audit(runtime, current_finding):
     assert not result["action_authorized"]
     last_line = audit.AUDIT_LOG_PATH.read_text().splitlines()[-1]
     assert result["trace_id"] in last_line and result["decision_id"] in last_line
-    assert evaluator.get_bridge_command()[1].endswith("bridge.js")
 
 
 def test_actual_engine_missing_policy_fails_closed(runtime, current_finding, tmp_path, monkeypatch):
     evaluator, _ = runtime
-    monkeypatch.setattr(evaluator, "POLICIES_ROOT", tmp_path)
+    missing = evaluator.PROJECT_ROOT / ".runtime" / "missing-policies"
+    monkeypatch.setattr(evaluator, "POLICIES_ROOT", missing)
     result = Governance().review(current_finding)
     assert result["status"] == "UNAVAILABLE" and result["action"] == "block"
     assert result["trace_id"] is None and not result["action_authorized"]

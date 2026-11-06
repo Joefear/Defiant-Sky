@@ -110,6 +110,20 @@ test("real mode displays cohort, persisted schedule and quarantined objects", as
   assert.equal(app.timers.size, 0);
 });
 
+test("scheduling failure is distinct from unavailable history", async () => {
+  const report = { ...snapshot(false, [finding]), data_state: "HISTORICAL COMPARISON",
+    live_enabled: true, scheduling_error: true, storage_error: false,
+    refresh_status: "SCHEDULING UNAVAILABLE", scheduler_retry_at: "2026-11-06T01:01:00Z" };
+  const app = harness((url) => url.endsWith("/tle") ? [] : report);
+  await flush();
+  assert.equal(app.get("dataState").textContent, "HISTORICAL COMPARISON");
+  assert.match(app.get("refreshStatus").textContent, /History: validated/);
+  assert.match(app.get("refreshStatus").textContent, /Next retrieval: blocked \(scheduling failure\)/);
+  assert.match(app.get("refreshStatus").textContent, /Scheduler retry: 2026-11-06T01:01:00Z/);
+  assert.doesNotMatch(app.get("refreshStatus").textContent, /disabled/);
+  assert.equal(app.timers.size, 0);
+});
+
 test("late advisory result cannot overwrite a mode switch", async () => {
   let resolveReview;
   const pending = new Promise((resolve) => { resolveReview = resolve; });

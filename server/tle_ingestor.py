@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from pathlib import Path
 import sqlite3
@@ -56,12 +56,24 @@ class TLEIngestor:
         self.rejected_objects = {}
         self.unidentified_rejection = False
         self.storage_error = False
+        self.unpersisted_input = False
+        self.scheduling_error = False
+        self.scheduler_retry_at = None
 
     def _read_history(self):
         records, self.rejected_records = self.store.read()
         self.records = [r for r in records if not self.catalog_ids or r.catalog_id in self.catalog_ids]
         self.rejected_objects, self.unidentified_rejection = self.store.ingestion_health()
+        if self.catalog_ids:
+            self.rejected_objects = {key: value for key, value in self.rejected_objects.items() if key in self.catalog_ids}
         self.unidentified_rejection = self.unidentified_rejection or bool(self.rejected_records)
+
+    def _verify_history(self):
+        try:
+            self._read_history()
+            self.storage_error = self.unpersisted_input
+        except (OSError, sqlite3.Error, ValueError, TypeError):
+            self.storage_error = True
 
     async def start(self):
         try:
@@ -87,7 +99,8 @@ class TLEIngestor:
 
     async def _refresh_loop(self):
         while True:
-            delay = max(1, (self.next_poll_at - self.clock()).total_seconds()) if self.next_poll_at else self.refresh_seconds
+            due = self.scheduler_retry_at or self.next_poll_at
+            delay = max(1, (due - self.clock()).total_seconds()) if due else self.refresh_seconds
             await asyncio.sleep(delay)
             await self.refresh()
 
@@ -98,16 +111,27 @@ class TLEIngestor:
         # Only one fetch per service; SQLite also serializes reservation by processes
         # sharing this history file. Readers do not wait for network requests.
         async with self._refresh_lock:
+            if self.scheduler_retry_at and self.clock() < self.scheduler_retry_at:
+                return
             try:
                 if self.store is None:
                     self.store = HistoryStore(self.history_path, self.settings)
                 reserved, self.next_poll_at = self.store.reserve_poll(self.clock(), self.refresh_seconds, self.minute_factory)
+                if self.scheduling_error:
+                    self._verify_history()
+                self.scheduling_error = False
+                self.scheduler_retry_at = None
                 if not reserved:
                     self.refresh_status = "COOLDOWN: waiting for scheduled GP retrieval"
                     return
             except (OSError, sqlite3.Error, ValueError, TypeError):
-                self.storage_error = True
-                self.refresh_status = "UNAVAILABLE: cannot persist polling reservation"
+                self.scheduling_error = True
+                self.scheduler_retry_at = self.clock() + timedelta(seconds=60)
+                if self.store is not None:
+                    self._verify_history()
+                else:
+                    self.storage_error = True
+                self.refresh_status = "SCHEDULING UNAVAILABLE: provider requests blocked; history checked separately"
                 return
             try:
                 raw_records = await asyncio.wait_for(self._fetch_latest_leo_tles(), timeout=FETCH_TIMEOUT_SECONDS)
@@ -160,11 +184,13 @@ class TLEIngestor:
             self.store.add(accepted, now, rejected=rejected, unidentified=unidentified, cohort=self.catalog_ids)
             self._read_history()
             self.rejected_records += invalid_count
+            self.unpersisted_input = False
             self.storage_error = False
             if accepted:
                 self.last_success = now
             self.refresh_status = "DEGRADED: rejected or missing GP records" if invalid_count or self.rejected_objects else "LIVE DATA"
         except (OSError, sqlite3.Error):
+            self.unpersisted_input = True
             self.storage_error = True
             self.refresh_status = "UNAVAILABLE: history persistence failed"
 
@@ -200,6 +226,7 @@ class TLEIngestor:
                 "last_ingested_at": max((r.ingested_at for r in self.records), default=None),
                 "rejected_records": self.rejected_records, "quarantined_catalog_ids": sorted(self.rejected_objects),
                 "unidentified_rejection": self.unidentified_rejection, "storage_error": self.storage_error,
+                "scheduling_error": self.scheduling_error, "scheduler_retry_at": self.scheduler_retry_at,
                 "live_enabled": self.live_enabled, "catalog_ids": self.catalog_ids,
                 "refresh_seconds": self.refresh_seconds, "next_poll_at": self.next_poll_at,
                 "settings": self.settings, "findings": findings, "action_authorized": False,

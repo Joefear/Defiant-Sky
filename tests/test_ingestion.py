@@ -125,7 +125,8 @@ def test_reservation_failure_prevents_network(tmp_path, now, monkeypatch, failur
             monkeypatch.setattr(s.store, "reserve_poll", fail)
         await s.refresh()
         s._fetch_latest_leo_tles.assert_not_awaited()
-        assert s.storage_error and s.refresh_status.startswith("UNAVAILABLE")
+        assert s.scheduling_error and not s.storage_error
+        assert s.refresh_status.startswith("SCHEDULING UNAVAILABLE")
         await s.stop()
     asyncio.run(scenario())
 

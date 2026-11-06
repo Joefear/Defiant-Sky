@@ -36,8 +36,8 @@ def initial_poll(now: datetime, minute: int) -> datetime:
 
 def next_poll(now: datetime, interval: int, minute: int) -> datetime:
     due = now + timedelta(seconds=interval)
-    # Normal hourly polling keeps its randomly selected minute. A delayed wake or
-    # non-hourly interval must also avoid the provider's busy minutes 00 and 30.
+    # The added network budget can shift the minute between attempts. A delayed
+    # wake or non-hourly interval must also avoid the busy minutes 00 and 30.
     if due.minute in {0, 30}:
         due = initial_poll(due, minute)
     return due.astimezone(UTC)

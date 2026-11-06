@@ -50,13 +50,22 @@ rather than `gp_history`. The full request format remains subject to authorized
 live verification; offline transport tests validate the constructed URL and parser.
 
 `DS_REFRESH_SECONDS` defaults to 3600 and cannot be lower. The first retrieval is
-scheduled at a randomly selected minute excluding 00 and 30, with no immediate
-startup fetch. An atomic SQLite reservation records the next permitted attempt
+scheduled at a randomly selected minute excluding 00 and 30 on a new database.
+A restart with an expired reservation can fetch during startup at a permitted
+minute; a restart during cooldown cannot. An atomic SQLite reservation records the next permitted attempt
 **before** login. A 60-second total network budget is added to the cooldown, giving
 at least 60 minutes between GP requests even with a delayed login or crash. Delayed
 wakes at minute 00 or 30 are rescheduled. Failures, cancellation, backwards clock
 changes and process restarts retain the reservation. Requests sharing this database
 cannot reserve the same interval; historical reads remain responsive during fetches.
+
+Scheduling failures block provider requests and retry no sooner than 60 seconds
+later. `scheduling_error` and `scheduler_retry_at` distinguish this from
+`storage_error`. History is independently reloaded and provenance-checked: valid
+retained evidence remains `HISTORICAL COMPARISON`, while unreadable, corrupt, stale,
+quarantined or unpersisted input remains blocked. Recovery never clears or shortens
+the persisted provider reservation. The extra network budget shifts the poll
+minute over time; busy-minute deferral can extend the interval.
 
 Use the same persistent `DS_HISTORY_PATH` across restarts and all instances sharing
 this account. Replacing/deleting it or using another database loses coordination;
@@ -136,7 +145,11 @@ This is local persistence, not a tamper-proof audit ledger.
 
 The previous `data/tle_cache.json` is left untouched and is **not** promoted into
 evidence: the legacy schema lacks trustworthy per-record ingestion/provenance.
-Fresh collection starts the new history. Existing `.env` files remain supported.
+Fresh collection starts the new history. To migrate an older `.env`, set
+`DS_LIVE_ENABLED=0` for offline review. Older configurations with live mode enabled
+but no explicit `DS_CATALOG_IDS` now fail startup deliberately; configure a cohort
+only for separately authorized live validation. Set offline mode in the shell
+before tests, because application imports precede pytest fixtures.
 
 | Environment setting | Default | Purpose |
 | --- | --- | --- |
@@ -151,6 +164,12 @@ Fresh collection starts the new history. Existing `.env` files remain supported.
 | DS_SETS_PER_OBJECT | 32 | Maximum distinct sets per object (minimum 2). |
 | DS_MAX_OBJECTS | 500 | Maximum retained catalog objects. |
 | GUARDRAIL_PATH | unset | Optional external Guardrail Python package directory. |
+
+An explicit `GUARDRAIL_PATH` must contain the approved `guardrail_core` package.
+Its evaluator, models and loaded package modules must resolve there. Missing,
+linked, shadowed or mismatched cached installations fail closed; there is no
+fallback to another installed package. Remove conflicting environment/package
+configuration and restart the process rather than switching cached runtimes.
 
 Invalid settings fail startup rather than silently changing detector behavior.
 No credentials are returned by the API or written to history. Live fetch errors
@@ -210,9 +229,18 @@ Remove-Item Env:DS_GUARDRAIL_TEST_COPY
 
 The copy destination must be new and outside the source repository. The helper
 copies runtime code and policy only, records source hashes, and never imports the
-source installation. Tests refuse the original path and assert the bridge and audit
-paths resolve inside the copy. Runtime code and policies are not edited. Fault tests
-change in-memory lookup functions only. The unchanged SDA policy always requires
+source installation. Before import, tests verify the manifest hashes, required
+files, absence of extra runtime files, source separation and linked/reparse/hard-link
+paths, including audit destinations. Previously cached Guardrail modules are rejected.
+After importing the verified copy and before evaluation, tests validate loaded
+module origins, policy location, audit location and the exact compiled bridge script
+inside the copy. The Node interpreter itself is the installed system runtime.
+Only the inspected two-argument compiled bridge command is supported. These guards
+prevent accidental redirection of trusted runtime code; they are not a sandbox for
+hostile source or concurrent filesystem replacement. Do not mutate the copy during
+testing. Runtime code and policies are not edited. Fault tests change in-memory
+lookup functions only, keeping any missing-policy destination inside the copy.
+The unchanged SDA policy always requires
 approval for this action: clean `allow`/`block`/`require_approval` adapter outcomes
 are covered by stubs. A separate actual-engine nonmatching-tool `allow` probe is
 replayed through the adapter to check the response contract; it is not evidence of
@@ -234,6 +262,7 @@ run live requests now, merge, deploy, or enable operational actions.
 ## Offline verification and reproducible sample
 
 ```powershell
+$env:DS_LIVE_ENABLED = '0'
 python -m pytest -q
 node --test tests/client.test.cjs
 python -m server.demo

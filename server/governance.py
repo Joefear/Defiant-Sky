@@ -3,11 +3,10 @@
 import importlib
 from datetime import datetime
 import os
-from pathlib import Path
-import sys
 from uuid import UUID
 
 from .evidence import UTC, Finding, Settings, detect, parse_element_set
+from .guardrail_loader import load_configured
 
 
 class Governance:
@@ -23,12 +22,16 @@ class Governance:
             return
         self.load_attempted = True
         path = os.getenv("GUARDRAIL_PATH")
-        if path and str(Path(path)) not in sys.path:
-            sys.path.append(str(Path(path)))
         try:
-            evaluator = importlib.import_module("guardrail_core.evaluator")
+            if path is not None:
+                if not path.strip():
+                    raise ValueError("Empty configured Guardrail path")
+                evaluator, models = load_configured(path)
+            else:
+                evaluator = importlib.import_module("guardrail_core.evaluator")
+                models = importlib.import_module("guardrail_core.models")
             self.evaluate = getattr(evaluator, "evaluate", None) or evaluator.evaluate_request
-            self.request_type = importlib.import_module("guardrail_core.models").DecisionRequest
+            self.request_type = models.DecisionRequest
         except Exception:
             self.evaluate = self.request_type = None
 
