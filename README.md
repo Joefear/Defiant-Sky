@@ -26,13 +26,42 @@ the globe currently loads the existing pinned CesiumJS 1.114 and satellite.js 5.
 scripts from public CDNs, so a fresh browser needs internet access for visualization.
 The findings panel remains usable if those libraries or WebGL are unavailable.
 
-For live collection, set `SPACETRACK_USER` and `SPACETRACK_PASS` locally in `.env`,
-then set `DS_LIVE_ENABLED=1` and restart. Do not commit credentials. The ingestor
-requests up to 50 latest LEO GP records at startup and every 600 seconds. A first
-valid fetch normally produces **INSUFFICIENT DATA**: two distinct comparable epochs
-for the same object must accumulate before any comparison is possible. Repeated
-identical downloads do not create history. The top-50 query does not guarantee
-continuous coverage of the same objects.
+Live ingestion is **disabled by default**. Credentialed validation requires separate
+owner authorization. After approval, configure `SPACETRACK_USER`, `SPACETRACK_PASS`
+and an explicit `DS_CATALOG_IDS` comma-separated cohort locally, then set
+`DS_LIVE_ENABLED=1`. Never commit credentials. The cohort is sorted, deduplicated,
+stable across retrievals and limited to 50 numeric TLE-compatible IDs (1–99999).
+There is no global latest-50 selection, automatic cohort discovery or historical backfill.
+Missing/decayed objects remain missing; other objects are not substituted automatically.
+
+A first valid fetch normally produces **INSUFFICIENT DATA**: two distinct comparable
+epochs for the same object must accumulate before comparison. Identical downloads
+and repeated epochs do not create comparable history. The cohort permits repeated
+coverage of the same objects but cannot guarantee provider publication of new epochs.
+
+### Provider polling and restart safety
+
+[Official Space-Track API guidance](https://www.space-track.org/documentation#/api),
+checked 2026-11-06, specifies hourly GP retrieval, off-peak scheduling, aggregate
+queries and bounds below 30 requests/minute and 300/hour. DS-M1 sends one login and
+one aggregate GP query per scheduled attempt. The query uses `NORAD_CAT_ID`,
+`DECAY_DATE/null-val`, `EPOCH/>now-10`, the existing LEO mean-motion range, and `gp`
+rather than `gp_history`. The full request format remains subject to authorized
+live verification; offline transport tests validate the constructed URL and parser.
+
+`DS_REFRESH_SECONDS` defaults to 3600 and cannot be lower. The first retrieval is
+scheduled at a randomly selected minute excluding 00 and 30, with no immediate
+startup fetch. An atomic SQLite reservation records the next permitted attempt
+**before** login. A 60-second total network budget is added to the cooldown, giving
+at least 60 minutes between GP requests even with a delayed login or crash. Delayed
+wakes at minute 00 or 30 are rescheduled. Failures, cancellation, backwards clock
+changes and process restarts retain the reservation. Requests sharing this database
+cannot reserve the same interval; historical reads remain responsive during fetches.
+
+Use the same persistent `DS_HISTORY_PATH` across restarts and all instances sharing
+this account. Replacing/deleting it or using another database loses coordination;
+the app cannot police other tools or account users. Before authorized use, coordinate
+those clients with the owner. API/UI reads do not trigger a provider request.
 
 Use one server worker for this local prototype. Bind to loopback; this milestone
 does not provide a multi-user authentication or operational authorization service.
@@ -44,7 +73,7 @@ does not provide a multi-user authentication or operational authorization servic
 | LIVE DATA | A successful live fetch occurred within two refresh intervals and usable fresh elements exist. This describes feed activity, not live sensor tracking. |
 | HISTORICAL COMPARISON | Locally retained, still-valid element sets are being reviewed; the service may be offline or a fetch may have failed. Each real finding is a historical comparison even while the feed is live. |
 | SIMULATED DEMO | Explicit switch; synthetic catalog object 99999 at a fixed simulation clock. No real history writes, policy evaluation or authorization. |
-| UNAVAILABLE | No fresh evidence, rejected source records, storage failure, or API failure. No operational action is authorized. |
+| UNAVAILABLE | No usable fresh evidence, an unidentified/corrupt input, storage failure, or API failure. Object-specific rejections suppress that object's finding; unrelated valid objects remain reviewable with degraded feed status. |
 
 Each object finding is one of `INSUFFICIENT DATA`, `WITHIN THRESHOLD`, or
 `CANDIDATE ORBITAL-ELEMENT DIVERGENCE`. `REVIEW` severity means review of a screening
@@ -86,9 +115,14 @@ The 10 km default is an illustrative screening setting requiring validation, not
 an operational threshold. Stale or future input, missing provenance, catalog/source
 mismatch, ambiguous/equal epochs, excessive epoch gaps, insufficient history and
 propagation failures yield `INSUFFICIENT DATA` with no metric or confidence.
-Any rejected record degrades the current batch rather than silently reusing a prior
-candidate as current evidence. Diagnostic rejection counts do not contain remote
-response bodies or credentials.
+Identifiable rejected updates quarantine only that cohort object's findings and
+globe position. Quarantine is persisted with history and survives unrelated batches
+and restarts until a strictly newer valid epoch arrives. A duplicate cannot clear it.
+An unidentified malformed batch or corrupt stored row fails closed globally; a
+subsequent identifiable batch can clear the unidentified-batch flag. Corrupt stored
+rows require owner investigation or retention expiry. Do not delete the database
+to repair it without preserving its retrieval cooldown. Diagnostics contain counts
+and catalog IDs, never remote response bodies or credentials.
 
 ## Persistence and settings
 
@@ -106,7 +140,9 @@ Fresh collection starts the new history. Existing `.env` files remain supported.
 
 | Environment setting | Default | Purpose |
 | --- | --- | --- |
-| DS_LIVE_ENABLED | 1 | Set 0 to disable Space-Track fetches. |
+| DS_LIVE_ENABLED | 0 | Set 1 only after explicit configuration and owner authorization for live access. |
+| DS_CATALOG_IDS | empty | Stable comma-separated cohort; required for live mode; at most 50 IDs in 1–99999. |
+| DS_REFRESH_SECONDS | 3600 | Minimum permitted interval, plus the 60-second network budget; busy-minute deferral can extend it. |
 | DS_HISTORY_PATH | repository `data/element_history.sqlite3` | Local persistence path. |
 | DS_THRESHOLD_KM | 10 | Strictly-greater-than candidate threshold. |
 | DS_MAX_AGE_HOURS | 72 | Maximum epoch and ingestion age of both sets. |
@@ -135,7 +171,7 @@ The Guardrail adapter preserves the existing `sda-ops-v1.yml` /
 `sda_anomaly_response` boundary without changing Guardrail, Spartan or DGCE.
 It supports the existing `evaluate` / `evaluate_request` import variants.
 Guardrail is optional for read-only evidence review; import errors, evaluation
-errors, unknown decisions and missing decision identifiers return `block` and
+errors, unknown decisions and missing/malformed decision identifiers return `block` and
 `UNAVAILABLE`. Missing/stale/simulated evidence is blocked before evaluation.
 The old client-supplied classification/confidence POST schema is intentionally
 rejected. A finding ID is rechecked at evaluation time, so it cannot preserve
@@ -147,8 +183,53 @@ shows only actual returned trace/decision/policy IDs and time, never fabricated
 approvals, policy checkmarks, signatures or fingerprints. There is no operational
 action executor, durable operator-action audit stream, or claimed GDF certification.
 The prior Escalate/Monitor/Ignore console actions are replaced with an explicit
-disabled operational-action control. Real Guardrail policy compatibility still
-requires owner validation against the installed package and policy pack.
+disabled operational-action control. `decision_source` distinguishes local safety
+blocks from external Guardrail recommendations. The adapter revalidates evidence,
+requires canonical nonzero UUID trace/decision IDs, policy ID `sda-ops-v1`, an aware
+recent decision timestamp (at most five minutes old, one minute future clock skew),
+and no engine `evaluation_error` findings. An engine failure cannot masquerade as a
+successful policy block. No returned ID is converted into operational authorization.
+
+The installed runtime at Guardrail commit `63f9dee7f9188df0008ca42a7de8ca195104c644`
+was tested using unchanged copies of its Python source, compiled TypeScript bridge
+and SDA policy. Actual `evaluate_request(DecisionRequest(...))` returned
+`require_approval` for `sda_anomaly_response`; returned IDs matched the isolated audit
+record. Missing-policy and bridge-failure cases returned local fail-closed results.
+Other policy/runtime versions still require isolated compatibility verification.
+
+### Repeat isolated installed-engine verification
+
+```powershell
+python -m pip install -r requirements-guardrail-test.txt
+python tools/prepare_guardrail_copy.py C:/path/to/defiant-guardrail C:/task-work/new-guardrail-copy
+$env:DS_GUARDRAIL_TEST_COPY = 'C:/task-work/new-guardrail-copy'
+$env:PYTHONDONTWRITEBYTECODE = '1'
+python -m pytest tests/test_guardrail_installed.py -q
+Remove-Item Env:DS_GUARDRAIL_TEST_COPY
+```
+
+The copy destination must be new and outside the source repository. The helper
+copies runtime code and policy only, records source hashes, and never imports the
+source installation. Tests refuse the original path and assert the bridge and audit
+paths resolve inside the copy. Runtime code and policies are not edited. Fault tests
+change in-memory lookup functions only. The unchanged SDA policy always requires
+approval for this action: clean `allow`/`block`/`require_approval` adapter outcomes
+are covered by stubs. A separate actual-engine nonmatching-tool `allow` probe is
+replayed through the adapter to check the response contract; it is not evidence of
+an SDA `allow`. The actual-engine suite is opt-in and skipped in ordinary CI.
+
+### Authorized live validation still required
+
+No credentialed Space-Track requests were performed for this milestone. After
+separate approval, the owner should select a small cohort, coordinate account usage,
+configure credentials locally, and retain one history database. Observe the first
+scheduled fetch and a later permitted fetch with a new published epoch. Capture
+sanitized request times, object IDs, epochs, validity, deduplication counts and
+candidate/insufficient-data outcomes. Restart during cooldown and verify no extra
+login/query. Do not speed up polling or backfill if no new epoch is published.
+Actual API field availability, authentication and repeated-element coverage remain
+unverified until that evidence is obtained. This procedure grants no authority to
+run live requests now, merge, deploy, or enable operational actions.
 
 ## Offline verification and reproducible sample
 

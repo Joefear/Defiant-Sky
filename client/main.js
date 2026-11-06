@@ -124,7 +124,7 @@
       const result = await response.json();
       if (token !== generation || request !== reviewGeneration) return;
       el("governanceStatus").textContent = `${result.status} · ${result.action}: ${result.summary}`;
-      el("governanceTrace").textContent = JSON.stringify({ trace_id: result.trace_id, decision_id: result.decision_id, policy_id: result.policy_id, created_at: result.created_at, action_authorized: false }, null, 2);
+      el("governanceTrace").textContent = JSON.stringify({ decision_source: result.decision_source, trace_id: result.trace_id, decision_id: result.decision_id, policy_id: result.policy_id, created_at: result.created_at, action_authorized: false }, null, 2);
     } catch (_) {
       if (token === generation && request === reviewGeneration) el("governanceStatus").textContent = "UNAVAILABLE — operational actions blocked.";
     }
@@ -152,7 +152,9 @@
       if (snapshot.mode !== (demo ? "demo" : "real")) throw new Error("Mode mismatch");
       el("dataState").textContent = snapshot.data_state;
       el("summary").textContent = `${snapshot.status} · ${snapshot.findings.length} catalog object(s)`;
-      el("refreshStatus").textContent = `${snapshot.refresh_status} | Rejected: ${snapshot.rejected_records || 0}`;
+      el("refreshStatus").textContent = demo
+        ? snapshot.refresh_status
+        : `${snapshot.refresh_status} | Cohort: ${(snapshot.catalog_ids || []).join(", ") || "not configured"} | Next retrieval: ${snapshot.next_poll_at || "disabled"} | Rejected this load/batch: ${snapshot.rejected_records || 0} | Quarantined: ${(snapshot.quarantined_catalog_ids || []).join(", ") || "none"}`;
       el("lastUpdated").textContent = snapshot.last_ingested_at || "UNAVAILABLE";
       if (demo) {
         demoClock = new Date(snapshot.evaluated_at);

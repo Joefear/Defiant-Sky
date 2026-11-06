@@ -25,6 +25,8 @@ def records(fixture):
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
+    for name in ("DS_THRESHOLD_KM", "DS_MAX_AGE_HOURS", "DS_MAX_GAP_HOURS", "DS_RETENTION_DAYS", "DS_SETS_PER_OBJECT", "DS_MAX_OBJECTS", "DS_CATALOG_IDS", "DS_REFRESH_SECONDS", "DS_HISTORY_PATH"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("SPACETRACK_USER", raising=False)
     monkeypatch.delenv("SPACETRACK_PASS", raising=False)
     monkeypatch.setenv("DS_LIVE_ENABLED", "0")

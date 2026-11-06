@@ -98,6 +98,18 @@ test("failed API clears evidence and leaves actions blocked", async () => {
   assert.match(app.get("governanceStatus").textContent, /blocked/);
 });
 
+test("real mode displays cohort, persisted schedule and quarantined objects", async () => {
+  const report = { ...snapshot(false), catalog_ids: [12345, 99999],
+    next_poll_at: "2026-11-06T02:18:00Z", quarantined_catalog_ids: [99999],
+    refresh_status: "COOLDOWN", rejected_records: 1 };
+  const app = harness((url) => url.endsWith("/tle") ? [] : report);
+  await flush();
+  assert.match(app.get("refreshStatus").textContent, /Cohort: 12345, 99999/);
+  assert.match(app.get("refreshStatus").textContent, /Next retrieval: 2026-11-06T02:18:00Z/);
+  assert.match(app.get("refreshStatus").textContent, /Quarantined: 99999/);
+  assert.equal(app.timers.size, 0);
+});
+
 test("late advisory result cannot overwrite a mode switch", async () => {
   let resolveReview;
   const pending = new Promise((resolve) => { resolveReview = resolve; });

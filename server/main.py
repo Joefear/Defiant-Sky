@@ -18,7 +18,7 @@ class ReviewInput(BaseModel):
 
 def create_app(ingestor=None, governance=None):
     ingestor = ingestor or TLEIngestor()
-    governance = governance or Governance()
+    governance = governance or Governance(settings=ingestor.settings, clock=ingestor.clock)
 
     @asynccontextmanager
     async def lifespan(app):

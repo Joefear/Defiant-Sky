@@ -1,18 +1,22 @@
 """Advisory external Guardrail boundary. DS-M1 has no operational action executor."""
 
 import importlib
+from datetime import datetime
 import os
 from pathlib import Path
 import sys
+from uuid import UUID
 
-from .evidence import Finding
+from .evidence import UTC, Finding, Settings, detect, parse_element_set
 
 
 class Governance:
-    def __init__(self):
+    def __init__(self, settings=None, clock=None):
         self.evaluate = None
         self.request_type = None
         self.load_attempted = False
+        self.settings = settings or Settings()
+        self.clock = clock or (lambda: datetime.now(UTC))
 
     def load(self):
         if self.load_attempted:
@@ -20,7 +24,7 @@ class Governance:
         self.load_attempted = True
         path = os.getenv("GUARDRAIL_PATH")
         if path and str(Path(path)) not in sys.path:
-            sys.path.insert(0, str(Path(path)))
+            sys.path.append(str(Path(path)))
         try:
             evaluator = importlib.import_module("guardrail_core.evaluator")
             self.evaluate = getattr(evaluator, "evaluate", None) or evaluator.evaluate_request
@@ -29,10 +33,21 @@ class Governance:
             self.evaluate = self.request_type = None
 
     def review(self, finding: Finding | None):
-        result = {"action": "block", "action_authorized": False, "status": "INSUFFICIENT EVIDENCE",
+        result = {"action": "block", "action_authorized": False, "status": "INSUFFICIENT EVIDENCE", "decision_source": "local_safety_gate",
                   "summary": "Finding is missing, stale, simulated or lacks comparable evidence.",
                   "trace_id": None, "decision_id": None, "policy_id": None, "created_at": None}
         if finding is None or finding.mode != "real" or finding.separation_km is None:
+            return result
+        # Also fail closed for direct adapter callers, independently of API lookup.
+        try:
+            records = [view.record for view in finding.evidence]
+            for record in records:
+                if parse_element_set(record.model_dump(), record.ingested_at, "real") != record:
+                    raise ValueError("Invalid evidence provenance")
+            current = detect(records, self.clock(), self.settings)
+            if current.finding_id != finding.finding_id or current.separation_km is None or current.separation_km != finding.separation_km:
+                return result
+        except (ValueError, TypeError, KeyError, AttributeError):
             return result
         self.load()
         if self.evaluate is None:
@@ -49,9 +64,19 @@ class Governance:
             if action not in {"allow", "block", "modify", "require_approval"}:
                 raise ValueError("Unknown Guardrail decision")
             ids = {key: getattr(response, key, None) for key in ("trace_id", "decision_id", "policy_id", "created_at")}
-            if any(not value for value in ids.values()):
-                raise ValueError("Incomplete Guardrail record")
-            return {**result, **ids, "status": "ADVISORY ONLY", "action": action,
+            for key in ("trace_id", "decision_id"):
+                value = ids[key]
+                if not isinstance(value, str) or str(UUID(value)) != value.lower() or UUID(value).int == 0:
+                    raise ValueError("Malformed Guardrail identifier")
+            if ids["policy_id"] != "sda-ops-v1" or not isinstance(ids["created_at"], str):
+                raise ValueError("Missing or unexpected policy provenance")
+            timestamp = datetime.fromisoformat(ids["created_at"].replace("Z", "+00:00"))
+            if timestamp.tzinfo is None or not -60 <= (self.clock() - timestamp).total_seconds() <= 300:
+                raise ValueError("Stale or malformed decision time")
+            findings = getattr(response, "findings", None)
+            if not isinstance(findings, list) or any(not isinstance(f, dict) or f.get("finding_type") == "evaluation_error" for f in findings):
+                raise ValueError("Guardrail evaluation reported integration failure")
+            return {**result, **ids, "status": "ADVISORY ONLY", "action": action, "decision_source": "external_guardrail",
                     "summary": "Guardrail recommendation only. DS-M1 does not authorize or execute operational actions."}
         except Exception:
             return {**result, "status": "UNAVAILABLE", "summary": "Guardrail evaluation failed; operational actions blocked."}
