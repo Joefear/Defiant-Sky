@@ -148,3 +148,19 @@ def test_old_quarantine_hidden_after_cohort_change(tmp_path, now, records):
         assert (await changed.findings())["quarantined_catalog_ids"] == []
         assert 99999 in changed.store.ingestion_health()[0]  # Read did not discard persisted safety state.
     asyncio.run(scenario())
+
+
+def test_unpersisted_failure_flag_is_process_local(tmp_path, now, records, monkeypatch):
+    async def scenario():
+        s = service(tmp_path / "history.sqlite3", now)
+        await s.start()
+        await s._accept(gp(records))
+        monkeypatch.setattr(s.store, "add", failure)
+        await s._accept(gp(records))
+        assert (await s.findings())["data_state"] == "UNAVAILABLE"
+        restarted = service(s.history_path, now)
+        await restarted.start()
+        report = await restarted.findings()
+        assert report["data_state"] == "HISTORICAL COMPARISON"
+        assert not report["action_authorized"] and all(not f.action_authorized for f in report["findings"])
+    asyncio.run(scenario())

@@ -13,6 +13,7 @@ from sgp4.io import fix_checksum
 
 from server.evidence import UTC, Settings, detect, parse_element_set
 from server.governance import Governance
+from server.guardrail_loader import validate_modules
 from tools.guardrail_isolation import load_isolated_runtime
 
 
@@ -24,12 +25,15 @@ def runtime(monkeypatch):
     monkeypatch.setattr(sys, "dont_write_bytecode", True)
     monkeypatch.setenv("GUARDRAIL_PATH", str(Path(configured) / "packages/guardrail-core-python"))
     before = set(sys.modules)
+    before_finders = list(sys.meta_path)
     try:
         yield load_isolated_runtime(configured)
+        validate_modules(Path(configured).resolve() / "packages/guardrail-core-python/guardrail_core")
     finally:
         for name in set(sys.modules) - before:
             if name == "guardrail_core" or name.startswith("guardrail_core."):
                 sys.modules.pop(name, None)
+        sys.meta_path[:] = before_finders
 
 
 @pytest.fixture

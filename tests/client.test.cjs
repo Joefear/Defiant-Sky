@@ -117,7 +117,7 @@ test("scheduling failure is distinct from unavailable history", async () => {
   const app = harness((url) => url.endsWith("/tle") ? [] : report);
   await flush();
   assert.equal(app.get("dataState").textContent, "HISTORICAL COMPARISON");
-  assert.match(app.get("refreshStatus").textContent, /History: validated/);
+  assert.match(app.get("refreshStatus").textContent, /History: no integrity error/);
   assert.match(app.get("refreshStatus").textContent, /Next retrieval: blocked \(scheduling failure\)/);
   assert.match(app.get("refreshStatus").textContent, /Scheduler retry: 2026-11-06T01:01:00Z/);
   assert.doesNotMatch(app.get("refreshStatus").textContent, /disabled/);

@@ -66,8 +66,14 @@ def load_configured(directory):
     if existing is not None:
         if not existing.origin or checked_path(existing.origin, package, exists=True) != package / "__init__.py":
             raise ValueError("Configured Guardrail installation is shadowed")
-    finder = ApprovedFinder(directory, package)
+    guards = [finder for finder in sys.meta_path if isinstance(finder, ApprovedFinder)]
+    if len(guards) > 1 or any(finder.package != package for finder in guards):
+        raise ValueError("Restart before switching the approved Guardrail installation")
+    finder = guards[0] if guards else ApprovedFinder(directory, package)
+    if guards:
+        sys.meta_path.remove(finder)
     sys.meta_path.insert(0, finder)
+    before = set(sys.modules)
     try:
         evaluator = importlib.import_module("guardrail_core.evaluator")
         models = importlib.import_module("guardrail_core.models")
@@ -76,5 +82,14 @@ def load_configured(directory):
         checked_path(inspect.getfile(evaluate), package, exists=True)
         checked_path(inspect.getfile(models.DecisionRequest), package, exists=True)
         return evaluator, models
-    finally:
-        sys.meta_path.remove(finder)
+    except Exception:
+        # A failed first load must not leave a partial package or a new guard.
+        if not guards:
+            sys.meta_path.remove(finder)
+            for name in set(sys.modules) - before:
+                if name == "guardrail_core" or name.startswith("guardrail_core."):
+                    sys.modules.pop(name, None)
+        raise
+    # Keep the guard first for subsequent lazy imports, including modules missing
+    # from the approved installation: those raise rather than trying another hook.
+    # Switching installations or mutating import hooks requires a process restart.

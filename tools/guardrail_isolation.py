@@ -5,10 +5,34 @@ This prevents accidental path redirection; it is not a sandbox for hostile code.
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 from server.guardrail_loader import checked_path, load_configured, validate_modules
+
+
+def check_node_environment():
+    if any(os.environ.get(name) for name in ("NODE_OPTIONS", "NODE_PATH")):
+        raise ValueError("Unset NODE_OPTIONS and NODE_PATH before isolated Guardrail testing")
+
+
+def isolated_bridge_runner(root, run):
+    """Give every child an explicit clean environment, even after preflight."""
+    def launch(command, **kwargs):
+        if command != ["node", str(root / "packages/core/dist/bridge.js")]:
+            raise ValueError("Unexpected isolated bridge command")
+        if checked_path(kwargs.get("cwd", ""), root, exists=True) != root or kwargs.get("shell"):
+            raise ValueError("Unexpected isolated bridge execution context")
+        checked_path(command[1], root, exists=True)
+        environment = dict(kwargs.get("env") if kwargs.get("env") is not None else os.environ)
+        # Windows environment keys are case-insensitive, including an explicit
+        # caller-supplied dict; strip all spellings rather than just uppercase.
+        environment = {key: value for key, value in environment.items()
+                       if key.upper() not in {"NODE_OPTIONS", "NODE_PATH"}}
+        return run(command, **(kwargs | {"env": environment}))
+    return launch
 
 
 def verify_copy(directory):
@@ -66,10 +90,14 @@ def validate_execution_paths(root, evaluator, audit):
 
 
 def load_isolated_runtime(directory):
+    check_node_environment()
     root = verify_copy(directory)  # Verify all code and destinations before import.
     if any(name == "guardrail_core" or name.startswith("guardrail_core.") for name in sys.modules):
         raise ValueError("Use a fresh import context for isolated Guardrail tests")
     evaluator, _ = load_configured(root / "packages/guardrail-core-python")
     audit = importlib.import_module("guardrail_core.audit")
     validate_execution_paths(root, evaluator, audit)  # Before evaluation or audit write.
+    # Adapt this copy's evaluator only; never patch the global subprocess module
+    # or edit Guardrail source/policies. The inspected runtime uses only run().
+    evaluator.subprocess = SimpleNamespace(run=isolated_bridge_runner(root, evaluator.subprocess.run))
     return evaluator, audit

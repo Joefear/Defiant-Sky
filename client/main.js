@@ -154,7 +154,7 @@
       el("summary").textContent = `${snapshot.status} · ${snapshot.findings.length} catalog object(s)`;
       el("refreshStatus").textContent = demo
         ? snapshot.refresh_status
-        : `${snapshot.refresh_status} | History: ${snapshot.storage_error ? "unavailable" : snapshot.unidentified_rejection ? "invalid input" : "validated"} | Cohort: ${(snapshot.catalog_ids || []).join(", ") || "not configured"} | Next retrieval: ${snapshot.scheduling_error ? "blocked (scheduling failure)" : snapshot.next_poll_at || (snapshot.live_enabled ? "not scheduled" : "disabled")} | Scheduler retry: ${snapshot.scheduler_retry_at || "none"} | Rejected this load/batch: ${snapshot.rejected_records || 0} | Quarantined: ${(snapshot.quarantined_catalog_ids || []).join(", ") || "none"}`;
+        : `${snapshot.refresh_status} | History: ${snapshot.storage_error ? "unavailable" : snapshot.unidentified_rejection ? "invalid input" : "no integrity error"} | Cohort: ${(snapshot.catalog_ids || []).join(", ") || "not configured"} | Next retrieval: ${snapshot.scheduling_error ? "blocked (scheduling failure)" : snapshot.next_poll_at || (snapshot.live_enabled ? "not scheduled" : "disabled")} | Scheduler retry: ${snapshot.scheduler_retry_at || "none"} | Rejected this load/batch: ${snapshot.rejected_records || 0} | Quarantined: ${(snapshot.quarantined_catalog_ids || []).join(", ") || "none"}`;
       el("lastUpdated").textContent = snapshot.last_ingested_at || "UNAVAILABLE";
       if (demo) {
         demoClock = new Date(snapshot.evaluated_at);

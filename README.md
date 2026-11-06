@@ -66,6 +66,9 @@ retained evidence remains `HISTORICAL COMPARISON`, while unreadable, corrupt, st
 quarantined or unpersisted input remains blocked. Recovery never clears or shortens
 the persisted provider reservation. The extra network budget shifts the poll
 minute over time; busy-minute deferral can extend the interval.
+The unpersisted-input flag is process-local: after restart, independently valid
+retained history can again be inspected as historical evidence. This does not
+persist or promote the failed batch, clear persisted quarantines, or authorize actions.
 
 Use the same persistent `DS_HISTORY_PATH` across restarts and all instances sharing
 this account. Replacing/deleting it or using another database loses coordination;
@@ -170,6 +173,10 @@ Its evaluator, models and loaded package modules must resolve there. Missing,
 linked, shadowed or mismatched cached installations fail closed; there is no
 fallback to another installed package. Remove conflicting environment/package
 configuration and restart the process rather than switching cached runtimes.
+The approved import finder remains first for the process lifetime, covering lazy
+Guardrail imports as well as initial imports. Missing approved submodules fail
+closed without trying competing hooks. Do not replace or reorder import hooks
+after initialization; changing runtimes or import configuration requires restart.
 
 Invalid settings fail startup rather than silently changing detector behavior.
 No credentials are returned by the API or written to history. Live fetch errors
@@ -235,7 +242,14 @@ paths, including audit destinations. Previously cached Guardrail modules are rej
 After importing the verified copy and before evaluation, tests validate loaded
 module origins, policy location, audit location and the exact compiled bridge script
 inside the copy. The Node interpreter itself is the installed system runtime.
-Only the inspected two-argument compiled bridge command is supported. These guards
+Preflight rejects nonempty `NODE_OPTIONS` and `NODE_PATH`; unset them before testing.
+Every bridge launch also gets an explicit child environment with all spellings of
+those two variables removed, protecting against later inherited or supplied values.
+This is an in-memory adapter on the copied evaluator, not an edit to Guardrail or
+the global subprocess module. Only the inspected `subprocess.run` integration and
+two-argument compiled bridge command are supported. The inspected bundle uses
+relative imports and Node built-ins; different bundles require renewed inspection.
+These guards
 prevent accidental redirection of trusted runtime code; they are not a sandbox for
 hostile source or concurrent filesystem replacement. Do not mutate the copy during
 testing. Runtime code and policies are not edited. Fault tests change in-memory
