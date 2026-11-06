@@ -1,0 +1,20 @@
+{
+  "description": "Entirely synthetic element sets for deterministic algorithm tests and an explicit demo; not downloaded orbital data.",
+  "evaluated_at": "2026-11-06T01:00:00+00:00",
+  "records": [
+    {
+      "name": "SYNTHETIC DS-M1 OBJECT (not a catalog observation)",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26309.50000000  .00000000  00000-0  00000-0 0  9999",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600  85.6300 15.50000000    10",
+      "ingested_at": "2026-11-05T12:05:00+00:00"
+    },
+    {
+      "name": "SYNTHETIC DS-M1 OBJECT (not a catalog observation)",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26310.00000000  .00000000  00000-0  00000-0 0  9996",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600 355.8000 15.50000000    19",
+      "ingested_at": "2026-11-06T00:05:00+00:00"
+    }
+  ]
+}

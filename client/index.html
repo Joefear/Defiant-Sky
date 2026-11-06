@@ -1,214 +1,43 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Space Domain Awareness</title>
-    <link
-      rel="stylesheet"
-      href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css"
-    />
-    <link rel="stylesheet" href="./style.css" />
-  </head>
-  <body>
-    <main id="app">
-      <div id="cesiumContainer"></div>
-      <aside
-        id="anomalyAlert"
-        style="display: none; position: fixed; top: 18px; right: 18px; z-index: 20; background: #1A1A2E; border: 2px solid #FFC300; padding: 16px; font-family: Arial, Helvetica, sans-serif; line-height: 1.5;"
-        aria-live="assertive"
-      >
-        <div style="font-weight: bold; color: #FFC300; font-size: 14px;">⚠ ANOMALY DETECTED</div>
-        <div style="color: #E8F4FD;">RSO: <span id="anomalyRso">UNKNOWN</span></div>
-        <div style="color: #E8F4FD;">Deviation: +12.7% predicted track divergence</div>
-        <div style="color: #FFC300;">Status: MONITORING</div>
-        <div style="color: #AAAAAA; font-size: 11px;">Time: <span id="anomalyTime">PENDING</span></div>
-      </aside>
-      <aside
-        id="aiAnalysisPanel"
-        style="display: none; position: fixed; left: 18px; bottom: 80px; top: auto; transform: none; z-index: 20; background: #1A1A2E; border: 2px solid #2C3E7A; padding: 16px; width: 280px; font-family: Arial, Helvetica, sans-serif; box-sizing: border-box;"
-        aria-live="polite"
-      >
-        <div style="color: #2C3E7A; font-size: 11px; letter-spacing: 2px; margin-bottom: 12px;">AI ANALYSIS</div>
-        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
-        <div style="margin-bottom: 10px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Classification</div>
-          <div style="color: #E8F4FD; font-size: 13px; font-weight: bold;">Unscheduled Maneuver</div>
-        </div>
-        <div style="margin-bottom: 10px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Confidence</div>
-          <div style="color: #E8F4FD; font-size: 13px; font-weight: bold;">87.4%</div>
-        </div>
-        <div style="margin-bottom: 10px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Behavior Model</div>
-          <div style="color: #E8F4FD; font-size: 13px; font-weight: bold;">Propulsive Adjustment</div>
-        </div>
-        <div style="margin-bottom: 10px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Risk Category</div>
-          <div style="color: #FFC300; font-size: 13px; font-weight: bold;">MODERATE</div>
-        </div>
-        <div style="border-top: 1px solid #2C3E7A; margin-top: 12px; margin-bottom: 8px;"></div>
-        <div style="color: #AAAAAA; font-size: 10px; font-style: italic;">Model: Local — Offline Execution</div>
-      </aside>
-      <aside
-        id="operatorPanel"
-        style="display: none; position: fixed; top: 18px; left: 18px; z-index: 20; width: 260px; background: #1A1A2E; border: 2px solid #2C3E7A; padding: 16px; font-family: Arial, Helvetica, sans-serif; box-sizing: border-box;"
-        aria-live="polite"
-      >
-        <div style="color: #AAAAAA; font-size: 11px; letter-spacing: 2px;">OPERATOR ACTIONS</div>
-        <div style="border-top: 1px solid #2C3E7A; margin: 10px 0;"></div>
-        <div style="color: #E8F4FD; font-size: 12px;"><span id="operatorRsoName">UNKNOWN</span></div>
-        <div style="color: #FFC300; font-size: 12px; font-weight: bold; margin-bottom: 12px;">STATUS: AUTHORIZED — REVIEW REQUIRED</div>
-        <button
-          class="operatorActionButton"
-          data-action="ESCALATE"
-          type="button"
-          style="background: rgba(255,82,82,0.15); border: 1px solid #FF5252; color: #FF5252; padding: 8px; width: 100%; font-size: 11px; letter-spacing: 1px; cursor: pointer; font-family: inherit; margin-bottom: 8px;"
-        >
-          ESCALATE
-        </button>
-        <button
-          class="operatorActionButton"
-          data-action="MONITOR"
-          type="button"
-          style="background: rgba(76,175,80,0.15); border: 1px solid #4CAF50; color: #4CAF50; padding: 8px; width: 100%; font-size: 11px; letter-spacing: 1px; cursor: pointer; font-family: inherit; margin-bottom: 8px;"
-        >
-          MONITOR
-        </button>
-        <button
-          class="operatorActionButton"
-          data-action="IGNORE (LOGGED)"
-          type="button"
-          style="background: rgba(170,170,170,0.1); border: 1px solid #AAAAAA; color: #AAAAAA; padding: 8px; width: 100%; font-size: 11px; letter-spacing: 1px; cursor: pointer; font-family: inherit; margin-bottom: 8px;"
-        >
-          IGNORE (LOGGED)
-        </button>
-        <div id="operatorActionLog" style="margin-top: 10px; color: #AAAAAA; font-size: 10px; font-style: italic;"></div>
-      </aside>
-      <aside
-        id="governancePanel"
-        style="display: none; position: fixed; bottom: 20px; right: 18px; left: auto; transform: none; z-index: 20; width: 400px; background: #1A1A2E; border: 2px solid #2C3E7A; padding: 16px; font-family: Arial, Helvetica, sans-serif; box-sizing: border-box; line-height: 1.45; max-height: 50vh; overflow-y: auto;"
-        aria-live="polite"
-      >
-        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px;">
-          <div style="color: #AAAAAA; font-size: 11px; letter-spacing: 2px;">POLICY EVALUATION</div>
-          <div style="color: #2C3E7A; font-size: 11px;">Guardrail Layer</div>
-        </div>
-        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
-        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Policy Pack</div>
-          <div style="color: #E8F4FD; font-size: 12px;">SDA-OPS v1.0</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Input</div>
-          <div style="color: #E8F4FD; font-size: 12px;">AI Classification Result</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px;">
-          <div style="color: #AAAAAA; font-size: 11px;">Context</div>
-          <div style="color: #E8F4FD; font-size: 12px;">LEO / Non-Cooperative Object</div>
-        </div>
-        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
-        <div style="color: #4CAF50; font-size: 12px; margin-bottom: 6px;">✔ Classification Confidence &gt; Threshold</div>
-        <div style="color: #4CAF50; font-size: 12px; margin-bottom: 6px;">✔ Maneuver Type Allowed for Monitoring</div>
-        <div style="color: #FFC300; font-size: 12px; margin-bottom: 12px;">⚠ Operator Notification Required</div>
-        <div style="border-top: 1px solid #2C3E7A; margin-bottom: 12px;"></div>
-        <div style="display: flex; gap: 8px; align-items: baseline;">
-          <span style="color: #AAAAAA; font-size: 12px;">Decision:</span>
-          <span id="governanceDecision" style="color: #AAAAAA; font-size: 13px; font-weight: bold;">PENDING</span>
-        </div>
-        <div style="background: rgba(0,0,0,0.3); padding: 10px; margin-top: 8px; margin-bottom: 10px;">
-          <div style="color: #AAAAAA; font-size: 11px; margin-bottom: 6px;">Action:</div>
-          <div style="color: #E8F4FD; font-size: 12px;">- Allow classification visibility</div>
-          <div style="color: #E8F4FD; font-size: 12px;">- Require operator review before escalation</div>
-          <div style="color: #E8F4FD; font-size: 12px;">- Log full audit trace</div>
-        </div>
-        <div style="color: #AAAAAA; font-size: 10px; font-style: italic;">Trace ID: <span id="governanceTrace">PENDING</span></div>
-        <button
-          id="auditTraceButton"
-          type="button"
-          style="display: none; margin-top: 12px; background: transparent; border: 1px solid #2C3E7A; color: #E8F4FD; font-size: 11px; padding: 6px 12px; cursor: pointer; letter-spacing: 1px;"
-        >
-          VIEW AUDIT TRACE →
-        </button>
-      </aside>
-      <div
-        id="auditTraceOverlay"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; z-index: 1000;"
-      >
-        <section
-          id="auditTracePanel"
-          style="width: 560px; background: #1A1A2E; border: 2px solid #2C3E7A; padding: 24px; font-family: Arial, Helvetica, sans-serif; box-sizing: border-box; line-height: 1.45;"
-        >
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="color: #E8F4FD; font-size: 13px; font-weight: bold; letter-spacing: 2px;">AUDIT TRACE</div>
-            <button id="auditTraceClose" type="button" style="background: transparent; border: 0; color: #AAAAAA; font-size: 16px; cursor: pointer; padding: 0;">✕</button>
-          </div>
-          <div style="border-top: 1px solid #2C3E7A; margin: 12px 0;"></div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">Trace ID</div>
-            <div id="auditTraceId" style="color: #E8F4FD; font-size: 12px; font-family: monospace;">PENDING</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">Input Source</div>
-            <div style="color: #E8F4FD; font-size: 12px;">Space-Track TLE / SGP4 Propagation</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">AI Model</div>
-            <div style="color: #E8F4FD; font-size: 12px;">Local SDA Classifier v0.9</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">Policy Pack</div>
-            <div style="color: #E8F4FD; font-size: 12px;">SDA-OPS v1.0</div>
-          </div>
-          <div style="border-top: 1px solid #2C3E7A; margin: 12px 0;"></div>
-          <div style="color: #AAAAAA; font-size: 11px; letter-spacing: 2px; margin-bottom: 10px;">DECISION CHAIN</div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #E8F4FD; font-size: 12px;"><span style="color: #4CAF50;">●</span> Detection</div>
-            <div style="color: #AAAAAA; font-size: 11px; margin-left: 16px;">Orbital deviation flagged — +12.7% divergence</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #E8F4FD; font-size: 12px;"><span style="color: #4CAF50;">●</span> Classification</div>
-            <div style="color: #AAAAAA; font-size: 11px; margin-left: 16px;">Unscheduled Maneuver — 87.4% confidence</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #E8F4FD; font-size: 12px;"><span style="color: #FFC300;">●</span> Policy Evaluation</div>
-            <div style="color: #AAAAAA; font-size: 11px; margin-left: 16px;">SDA-OPS v1.0 — require_approval rule matched</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #E8F4FD; font-size: 12px;"><span style="color: #4CAF50;">●</span> Authorized Output</div>
-            <div style="color: #AAAAAA; font-size: 11px; margin-left: 16px;">MODIFY — operator review required before escalation</div>
-          </div>
-          <div style="border-top: 1px solid #2C3E7A; margin: 12px 0;"></div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">Final State</div>
-            <div style="color: #4CAF50; font-size: 12px; font-weight: bold;">AUTHORIZED WITH CONDITIONS</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">Timestamp</div>
-            <div id="auditTimestamp" style="color: #E8F4FD; font-size: 12px;">PENDING</div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <div style="color: #AAAAAA; font-size: 11px;">Decision ID</div>
-            <div id="auditDecisionId" style="color: #E8F4FD; font-size: 12px; font-family: monospace;">PENDING</div>
-          </div>
-          <div id="auditFingerprint" style="color: #AAAAAA; font-size: 10px; font-style: italic; margin-top: 12px;">Fingerprint: SHA-256 / PENDING...</div>
-        </section>
-      </div>
-      <section id="statusBar" aria-live="polite">
-        <span>Data Source: Space-Track.org</span>
-        <span>Last Updated: <time id="lastUpdated">INITIALIZING</time></span>
-        <span>Objects Tracked: <strong id="objectCount">0</strong></span>
-        <span>System Status: <strong id="systemStatus">NOMINAL</strong></span>
-        <span>Policy Pack: <strong>SDA-OPS v1.0</strong></span>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Defiant Sky | Orbital evidence</title>
+  <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <div id="cesiumContainer" aria-label="Propagated catalog object positions"></div>
+    <header>
+      <div><h1>DEFIANT SKY <small>DS-M1</small></h1><p>Orbital evidence review</p></div>
+      <label><input id="demoSwitch" type="checkbox" /> SIMULATED DEMO</label>
+    </header>
+    <aside id="evidencePanel" aria-label="Orbital findings">
+      <h2 id="dataState">UNAVAILABLE</h2>
+      <p id="summary" role="status">Loading evidence…</p>
+      <p id="refreshStatus"></p>
+      <p id="demoStage" hidden></p>
+      <p class="notice">Published orbital elements only. No independent radar, optical or RF observations. Unidentified does not mean unexplained; TLE catalogs cannot discover previously untracked airborne UFOs.</p>
+      <div id="findings"></div>
+      <section id="governancePanel">
+        <h2>Governance boundary</h2>
+        <p>Finding displayed ≠ action authorized.</p>
+        <p id="governanceStatus" role="status">NOT EVALUATED — operational actions blocked.</p>
+        <pre id="governanceTrace"></pre>
+        <button type="button" disabled>Operational actions unavailable in DS-M1</button>
       </section>
-    </main>
-
-    <script>
-      window.CESIUM_BASE_URL =
-        "https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/";
-    </script>
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
-    <script src="./main.js"></script>
-  </body>
+    </aside>
+    <footer id="statusBar">
+      <span>Last ingested: <time id="lastUpdated">UNAVAILABLE</time></span>
+      <span>Objects shown: <strong id="objectCount">0</strong></span>
+      <span id="globeStatus">Initializing globe</span>
+    </footer>
+  </main>
+  <script>window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/";</script>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+  <script src="./main.js"></script>
+</body>
 </html>

@@ -1,38 +1,58 @@
 import asyncio
-import json
+from datetime import datetime
 import os
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+import sqlite3
 
 import httpx
 from dotenv import load_dotenv
 
+from .evidence import UTC, Settings, detect, evidence_view, parse_element_set
+from .history import HistoryStore
 
-load_dotenv()
+ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT / ".env")
 
 
 class TLEIngestor:
-    def __init__(
-        self,
-        cache_path: str | Path = "data/tle_cache.json",
-        refresh_seconds: int = 600,
-        object_limit: int = 50,
-    ) -> None:
-        self.cache_path = Path(cache_path)
+    def __init__(self, history_path=None, refresh_seconds=600, object_limit=50,
+                 settings=None, live_enabled=None, clock=None):
+        self.settings = settings or Settings(
+            threshold_km=os.getenv("DS_THRESHOLD_KM", "10"),
+            max_age_hours=os.getenv("DS_MAX_AGE_HOURS", "72"),
+            max_gap_hours=os.getenv("DS_MAX_GAP_HOURS", "72"),
+            retention_days=os.getenv("DS_RETENTION_DAYS", "30"),
+            sets_per_object=os.getenv("DS_SETS_PER_OBJECT", "32"),
+            max_objects=os.getenv("DS_MAX_OBJECTS", "500"),
+        )
+        self.history_path = history_path or os.getenv("DS_HISTORY_PATH", str(ROOT / "data" / "element_history.sqlite3"))
+        self.store = None
         self.refresh_seconds = refresh_seconds
         self.object_limit = object_limit
+        self.live_enabled = live_enabled if live_enabled is not None else os.getenv("DS_LIVE_ENABLED", "1") == "1"
+        self.clock = clock or (lambda: datetime.now(UTC))
         self._lock = asyncio.Lock()
-        self._task: asyncio.Task[None] | None = None
-        self._tle_data: list[dict[str, str]] = []
+        self._task = None
+        self.records = []
+        self.last_success = None
+        self.refresh_status = "NOT STARTED"
+        self.rejected_records = 0
+        self.storage_error = False
 
-    async def start(self) -> None:
-        await self._load_cache()
-        if not self._tle_data:
+    async def start(self):
+        try:
+            self.store = HistoryStore(self.history_path, self.settings)
+            self.store.add([], self.clock())
+            self.records, self.rejected_records = self.store.read()
+        except (OSError, sqlite3.Error):
+            self.storage_error = True
+        if self.live_enabled:
             await self.refresh()
-        self._task = asyncio.create_task(self._refresh_loop())
+            self._task = asyncio.create_task(self._refresh_loop())
+        else:
+            self.refresh_status = "OFFLINE"
 
-    async def stop(self) -> None:
+    async def stop(self):
         if self._task:
             self._task.cancel()
             try:
@@ -40,121 +60,95 @@ class TLEIngestor:
             except asyncio.CancelledError:
                 pass
 
-    async def get_tle_data(self) -> list[dict[str, str]]:
-        async with self._lock:
-            return list(self._tle_data)
-
-    async def refresh(self) -> None:
-        try:
-            tle_data = await self._fetch_latest_leo_tles()
-        except Exception as exc:
-            print(f"TLE refresh failed: {exc}")
-            return
-
-        async with self._lock:
-            self._tle_data = tle_data
-
-        await self._write_cache(tle_data)
-
-    async def _refresh_loop(self) -> None:
+    async def _refresh_loop(self):
         while True:
             await asyncio.sleep(self.refresh_seconds)
             await self.refresh()
 
-    async def _load_cache(self) -> None:
-        if not self.cache_path.exists():
-            return
+    async def refresh(self):
+        async with self._lock:
+            try:
+                raw_records = await self._fetch_latest_leo_tles()
+                await self._accept(raw_records)
+            except (httpx.HTTPError, ValueError, RuntimeError, TypeError):
+                # Never log request bodies, credential values, or remote error text.
+                self.refresh_status = "UNAVAILABLE: live fetch failed or credentials missing"
 
+    async def _accept(self, raw_records):
+        if not isinstance(raw_records, list) or not raw_records:
+            raise ValueError("No GP records")
+        now = self.clock()
+        accepted, rejected = [], 0
+        for raw in raw_records[:self.object_limit]:
+            try:
+                if not raw["NORAD_CAT_ID"] or not raw["EPOCH"]:
+                    raise ValueError("Missing source provenance")
+                record = parse_element_set({
+                    "name": raw["OBJECT_NAME"], "tle1": raw["TLE_LINE1"], "tle2": raw["TLE_LINE2"],
+                    "catalog_id": raw["NORAD_CAT_ID"], "epoch": raw["EPOCH"],
+                }, now)
+                if record.epoch > now:
+                    raise ValueError("Future epoch")
+                accepted.append(record)
+            except (KeyError, ValueError, TypeError, AttributeError, OverflowError):
+                rejected += 1
+        self.rejected_records = rejected
+        if not accepted:
+            raise ValueError("No valid GP records")
         try:
-            cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
-            tles = cache.get("tles", [])
-            if isinstance(tles, list):
-                async with self._lock:
-                    self._tle_data = [
-                        item
-                        for item in tles
-                        if isinstance(item, dict)
-                        and isinstance(item.get("name"), str)
-                        and isinstance(item.get("tle1"), str)
-                        and isinstance(item.get("tle2"), str)
-                    ]
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"Unable to read TLE cache: {exc}")
+            if self.store is None:
+                self.store = HistoryStore(self.history_path, self.settings)
+            self.store.add(accepted, now)
+            records, corrupt = self.store.read()
+            self.records = records
+            self.rejected_records += corrupt
+            self.storage_error = False
+            self.last_success = now
+            self.refresh_status = "LIVE DATA" if not self.rejected_records else "DEGRADED: invalid records rejected"
+        except (OSError, sqlite3.Error):
+            self.storage_error = True
+            self.refresh_status = "UNAVAILABLE: history persistence failed"
 
-    async def _write_cache(self, tle_data: list[dict[str, str]]) -> None:
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "last_updated": datetime.now(timezone.utc).isoformat(),
-            "source": "Space-Track.org",
-            "tles": tle_data,
-        }
-        await asyncio.to_thread(
-            self.cache_path.write_text,
-            json.dumps(payload, indent=2),
-            "utf-8",
-        )
+    async def get_tle_data(self):
+        async with self._lock:
+            latest = {r.catalog_id: r for r in self.records}
+            return [{"name": r.name, "tle1": r.tle1, "tle2": r.tle2, "catalog_id": r.catalog_id}
+                    for r in latest.values() if evidence_view(r, self.clock(), self.settings).validity == "VALID"]
 
-    async def _fetch_latest_leo_tles(self) -> list[dict[str, str]]:
-        username = os.getenv("SPACETRACK_USER")
-        password = os.getenv("SPACETRACK_PASS")
+    async def findings(self):
+        async with self._lock:
+            now = self.clock()
+            groups = {}
+            for record in self.records:
+                groups.setdefault(record.catalog_id, []).append(record)
+            findings = [detect(records, now, self.settings) for _, records in sorted(groups.items())]
+            if self.storage_error or self.rejected_records:
+                findings = [f.model_copy(update={"status": "INSUFFICIENT DATA", "severity": "NONE",
+                    "quality": "INVALID OR UNPERSISTED INPUT", "reason": "Resolve rejected records or history storage failure.",
+                    "separation_km": None, "comparison_epoch": None}) for f in findings]
+            fresh = any(evidence_view(r, now, self.settings).validity == "VALID" for r in self.records)
+            live = self.last_success and 0 <= (now - self.last_success).total_seconds() <= self.refresh_seconds * 2
+            state = "LIVE DATA" if fresh and live and self.refresh_status == "LIVE DATA" else "HISTORICAL COMPARISON" if fresh else "UNAVAILABLE"
+            if self.storage_error or self.rejected_records:
+                state = "UNAVAILABLE"
+            return {
+                "mode": "real", "data_state": state, "evaluated_at": now,
+                "status": "EVIDENCE AVAILABLE" if any(f.separation_km is not None for f in findings) else "INSUFFICIENT DATA",
+                "refresh_status": self.refresh_status, "last_successful_fetch": self.last_success,
+                "last_ingested_at": max((r.ingested_at for r in self.records), default=None),
+                "rejected_records": self.rejected_records, "storage_error": self.storage_error,
+                "settings": self.settings, "findings": findings, "action_authorized": False,
+            }
+
+    async def _fetch_latest_leo_tles(self):
+        username, password = os.getenv("SPACETRACK_USER"), os.getenv("SPACETRACK_PASS")
         if not username or not password:
-            raise RuntimeError(
-                "SPACETRACK_USER and SPACETRACK_PASS must be set to fetch live TLE data"
-            )
-
-        async with httpx.AsyncClient(
-            base_url="https://www.space-track.org",
-            follow_redirects=True,
-            timeout=30.0,
-        ) as client:
-            login_response = await client.post(
-                "/ajaxauth/login",
-                data={"identity": username, "password": password},
-            )
-            login_response.raise_for_status()
-
-            query = (
-                "/basicspacedata/query/class/gp/"
-                "DECAY_DATE/null-val/"
-                "MEAN_MOTION/11.25--16.0/"
-                "orderby/EPOCH desc/"
-                f"limit/{self.object_limit}/"
-                "format/json"
-            )
-            response = await client.get(query)
+            raise RuntimeError("Credentials unavailable")
+        async with httpx.AsyncClient(base_url="https://www.space-track.org", timeout=30.0, follow_redirects=False) as client:
+            response = await client.post("/ajaxauth/login", data={"identity": username, "password": password})
             response.raise_for_status()
-            records = response.json()
-
-        return self._records_to_tle(records)
-
-    def _records_to_tle(self, records: Any) -> list[dict[str, str]]:
-        if not isinstance(records, list):
-            raise ValueError("Unexpected Space-Track response format")
-
-        tles: list[dict[str, str]] = []
-        seen_catalog_ids: set[str] = set()
-
-        for record in records:
-            if not isinstance(record, dict):
-                continue
-
-            catalog_id = str(record.get("NORAD_CAT_ID", "")).strip()
-            if catalog_id and catalog_id in seen_catalog_ids:
-                continue
-
-            name = str(record.get("OBJECT_NAME") or record.get("OBJECT_ID") or "").strip()
-            tle1 = str(record.get("TLE_LINE1") or "").strip()
-            tle2 = str(record.get("TLE_LINE2") or "").strip()
-
-            if name and tle1.startswith("1 ") and tle2.startswith("2 "):
-                tles.append({"name": name, "tle1": tle1, "tle2": tle2})
-                if catalog_id:
-                    seen_catalog_ids.add(catalog_id)
-
-            if len(tles) >= self.object_limit:
-                break
-
-        if not tles:
-            raise ValueError("Space-Track returned no usable TLE records")
-
-        return tles
+            response = await client.get(
+                "/basicspacedata/query/class/gp/DECAY_DATE/null-val/MEAN_MOTION/11.25--16.0/"
+                f"orderby/EPOCH desc/limit/{self.object_limit}/format/json")
+            response.raise_for_status()
+            return response.json()

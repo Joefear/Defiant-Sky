@@ -1,117 +1,64 @@
 from contextlib import asynccontextmanager
-import os
 from pathlib import Path
-import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
-GUARDRAIL_PATH = Path(
-    os.getenv(
-        "GUARDRAIL_PATH",
-        "C:/Users/samcf/Desktop/Dev/defiant-guardrail/packages/guardrail-core-python",
-    )
-)
-if str(GUARDRAIL_PATH) not in sys.path:
-    sys.path.insert(0, str(GUARDRAIL_PATH))
-
-try:
-    from guardrail_core.evaluator import evaluate
-except ImportError:
-    from guardrail_core.evaluator import evaluate_request as evaluate
-from guardrail_core.models import DecisionRequest
-
+from .demo import demo_snapshot
+from .governance import Governance
 from .tle_ingestor import TLEIngestor
 
 
-ingestor = TLEIngestor()
-CLIENT_DIR = Path(__file__).parent.parent / "client"
+class ReviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    finding_id: str = Field(min_length=64, max_length=64, pattern="^[0-9a-f]+$")
 
 
-class ClassificationInput(BaseModel):
-    rso_name: str
-    classification: str
-    confidence: float
-    risk_category: str
-    policy_pack: str = "default.yml"
+def create_app(ingestor=None, governance=None):
+    ingestor = ingestor or TLEIngestor()
+    governance = governance or Governance()
+
+    @asynccontextmanager
+    async def lifespan(app):
+        await ingestor.start()
+        try:
+            yield
+        finally:
+            await ingestor.stop()
+
+    app = FastAPI(title="Defiant Sky DS-M1", lifespan=lifespan)
+    app.add_middleware(CORSMiddleware,
+        allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "null"],
+        allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type"])
+
+    @app.get("/api/tle")
+    async def get_tle():
+        return await ingestor.get_tle_data()
+
+    @app.get("/api/findings")
+    async def get_findings():
+        return await ingestor.findings()
+
+    @app.get("/api/demo")
+    async def get_demo():
+        return demo_snapshot()
+
+    @app.get("/api/health")
+    async def health():
+        snapshot = await ingestor.findings()
+        return {"status": "RUNNING", "data_state": snapshot["data_state"],
+                "evidence_status": snapshot["status"], "action_authorized": False}
+
+    @app.post("/api/guardrail/evaluate")
+    async def evaluate_guardrail(body: ReviewInput):
+        snapshot = await ingestor.findings()
+        finding = next((f for f in snapshot["findings"] if f.finding_id == body.finding_id), None)
+        return governance.review(finding)
+
+    app.mount("/", StaticFiles(directory=str(Path(__file__).resolve().parent.parent / "client"), html=True), name="client")
+    return app
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await ingestor.start()
-    try:
-        yield
-    finally:
-        await ingestor.stop()
-
-
-app = FastAPI(title="Space Domain Awareness API", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost",
-        "http://localhost:8000",
-        "http://127.0.0.1",
-        "http://127.0.0.1:8000",
-        "null",
-    ],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/api/tle")
-async def get_tle():
-    return await ingestor.get_tle_data()
-
-
-@app.get("/api/health")
-async def health():
-    return {"status": "NOMINAL"}
-
-
-@app.post("/api/guardrail/evaluate")
-async def evaluate_guardrail(classification_input: ClassificationInput):
-    try:
-        request = DecisionRequest(
-            text=(
-                "SDA anomaly classification: "
-                f"{classification_input.classification}, "
-                f"confidence {classification_input.confidence}, "
-                f"RSO {classification_input.rso_name}, "
-                f"risk {classification_input.risk_category}"
-            ),
-            policy_pack=None,
-            policy_files=["sda-ops-v1.yml"],
-            mode="action",
-            requested_tool_name="sda_anomaly_response",
-            requested_command=None,
-            session_summary=None,
-            session_anomaly_flags=None,
-            code_graph_summary=None,
-            include_trace=True,
-        )
-        response = evaluate(request)
-        return {
-            "action": response.action_recommendation,
-            "trace_id": response.trace_id,
-            "policy_id": response.policy_id,
-            "summary": response.summary,
-            "findings": response.findings,
-            "created_at": response.created_at,
-            "decision_id": response.decision_id,
-        }
-    except Exception:
-        return {
-            "action": "block",
-            "summary": "Guardrail evaluation failed",
-            "trace_id": "ERROR",
-            "findings": [],
-        }
-
-
-app.mount("/", StaticFiles(directory=str(CLIENT_DIR), html=True), name="client")
+app = create_app()
