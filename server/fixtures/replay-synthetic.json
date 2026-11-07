@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "dataset_id": "ds-m2-stage-a-synthetic-v1",
+  "kind": "synthetic",
+  "source": "DS-M1 synthetic fixture",
+  "usage_basis": "Repository-authored artificial TLEs derived from the DS-M1 synthetic fixture; no provider records or independent observations.",
+  "records": [
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99998,
+      "tle1": "1 99998U 26001A   26309.50000000  .00000000  00000-0  00000-0 0  9998",
+      "tle2": "2 99998  51.6400 211.2000 0007000  17.6600  85.6300 15.50000000    19",
+      "ingested_at": "2026-11-05T12:05:00+00:00",
+      "record_id": "synthetic-99998-0",
+      "epoch": "2026-11-05T12:00:00+00:00",
+      "content_sha256": "e4bc676c4c12b21dc056cffd7256efa67227648a4f1b6b4cad703a56630aa41a"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99998,
+      "tle1": "1 99998U 26001A   26310.00000000  .00000000  00000-0  00000-0 0  9995",
+      "tle2": "2 99998  51.6400 211.2000 0007000  17.6600 355.8000 15.50000000    18",
+      "ingested_at": "2026-11-06T00:05:00+00:00",
+      "record_id": "synthetic-99998-1",
+      "epoch": "2026-11-06T00:00:00+00:00",
+      "content_sha256": "fe18d8893ca89a07c280795f7c32c201be318f844d835240d4dbc9214e7593c6"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99998,
+      "tle1": "1 99998U 26001A   26310.50000000  .00000000  00000-0  00000-0 0  9990",
+      "tle2": "2 99998  51.6400 211.2000 0007000  17.6600 265.9000 15.50000000    19",
+      "ingested_at": "2026-11-06T12:05:00+00:00",
+      "record_id": "synthetic-99998-2",
+      "epoch": "2026-11-06T12:00:00+00:00",
+      "content_sha256": "1d13da2124593b351ae2386ae7a0ddc25a0d87188dfb5be75ce4d43bc76d7305"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26309.50000000  .00000000  00000-0  00000-0 0  9999",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600  85.6300 15.50000000    10",
+      "ingested_at": "2026-11-05T12:05:00+00:00",
+      "record_id": "synthetic-99999-0",
+      "epoch": "2026-11-05T12:00:00+00:00",
+      "content_sha256": "97f2d760c55a800fe266ddcd067e7dd1a8679111b7fef2a61cdb1db843d0262a"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26310.00000000  .00000000  00000-0  00000-0 0  9996",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600 355.8000 15.50000000    19",
+      "ingested_at": "2026-11-06T00:05:00+00:00",
+      "record_id": "synthetic-99999-1",
+      "epoch": "2026-11-06T00:00:00+00:00",
+      "content_sha256": "eb14b3839cc9abf144e7e226c5cc71d7f1955677a381b8c94f6915270b938fc1"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26310.50000000  .00000000  00000-0  00000-0 0  9991",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600 265.9000 15.50000000    10",
+      "ingested_at": "2026-11-06T12:05:00+00:00",
+      "record_id": "synthetic-99999-2",
+      "epoch": "2026-11-06T12:00:00+00:00",
+      "content_sha256": "a9ba6b7963b49ccaf7b846ca88dc700a20cec3d906d51bbb1b1934ddfbc42150"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26310.50000000  .00000000  00000-0  00000-0 0  9991",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600 265.9000 15.50000000    10",
+      "ingested_at": "2026-11-06T13:00:00+00:00",
+      "record_id": "duplicate-control",
+      "epoch": "2026-11-06T12:00:00+00:00",
+      "content_sha256": "a9ba6b7963b49ccaf7b846ca88dc700a20cec3d906d51bbb1b1934ddfbc42150"
+    },
+    {
+      "name": "SYNTHETIC DS-M2 TEST OBJECT",
+      "catalog_id": 99999,
+      "tle1": "1 99999U 26001A   26310.50000000  .00000000  00000-0  00000-0 0  9991",
+      "tle2": "2 99999  51.6400 211.2000 0007000  17.6600 265.9000 15.50000000    10",
+      "ingested_at": "2026-11-06T14:00:00+00:00",
+      "record_id": "corruption-control",
+      "epoch": "2026-11-06T12:00:00+00:00",
+      "content_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
