@@ -1,0 +1,3 @@
+-r requirements-dev.txt
+# Optional only: required by the copied actual Guardrail evaluator.
+PyYAML==6.0.3
