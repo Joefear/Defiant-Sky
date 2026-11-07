@@ -1,4 +1,4 @@
-name: Offline DS-M1 tests
+name: Offline Defiant Sky tests
 on: [push, pull_request]
 permissions:
   contents: read

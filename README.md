@@ -1,9 +1,15 @@
-# Defiant Sky — DS-M1 orbital evidence prototype
+# Defiant Sky — orbital evidence prototype
 
 Defiant Sky compares successive published Space-Track element sets and displays
 explainable **candidate orbital-element divergence**. It is a local FastAPI and
 CesiumJS prototype, with a separate, explicitly selected synthetic demonstration.
 It does not detect maneuvers, intent, threats, unidentified aircraft or alien origin.
+
+DS-M2 Stage A adds a deterministic, local-file-only [historical replay and
+evaluation framework](docs/offline-replay.md), using the unchanged DS-M1 detector.
+Run `python -m server.replay server/fixtures/replay-synthetic.json --config server/fixtures/replay-config.json`
+for the labeled synthetic example. Engineering verification is separate from
+empirical calibration, which remains incomplete. No live acquisition is added.
 
 ## Setup and run
 
@@ -46,8 +52,8 @@ checked 2026-11-06, specifies hourly GP retrieval, off-peak scheduling, aggregat
 queries and bounds below 30 requests/minute and 300/hour. DS-M1 sends one login and
 one aggregate GP query per scheduled attempt. The query uses `NORAD_CAT_ID`,
 `DECAY_DATE/null-val`, `EPOCH/>now-10`, the existing LEO mean-motion range, and `gp`
-rather than `gp_history`. The full request format remains subject to authorized
-live verification; offline transport tests validate the constructed URL and parser.
+rather than `gp_history`. The bounded DS-M1 ISS run validated authentication and
+the GP response format; offline transport tests also cover the URL and parser.
 
 `DS_REFRESH_SECONDS` defaults to 3600 and cannot be lower. The first retrieval is
 scheduled at a randomly selected minute excluding 00 and 30 on a new database.
@@ -260,18 +266,17 @@ are covered by stubs. A separate actual-engine nonmatching-tool `allow` probe is
 replayed through the adapter to check the response contract; it is not evidence of
 an SDA `allow`. The actual-engine suite is opt-in and skipped in ordinary CI.
 
-### Authorized live validation still required
+### Completed bounded DS-M1 live validation
 
-No credentialed Space-Track requests were performed for this milestone. After
-separate approval, the owner should select a small cohort, coordinate account usage,
-configure credentials locally, and retain one history database. Observe the first
-scheduled fetch and a later permitted fetch with a new published epoch. Capture
-sanitized request times, object IDs, epochs, validity, deduplication counts and
-candidate/insufficient-data outcomes. Restart during cooldown and verify no extra
-login/query. Do not speed up polling or backfill if no new epoch is published.
-Actual API field availability, authentication and repeated-element coverage remain
-unverified until that evidence is obtained. This procedure grants no authority to
-run live requests now, merge, deploy, or enable operational actions.
+The owner-authorized ISS-only validation completed three successful GP retrievals
+on 2026-11-07 at approximately 61-minute spacing, retaining two distinct epochs.
+The third response added no new retained set. SGP4 separation was approximately
+0.0812 km, within the illustrative 10 km threshold, without maneuver inference.
+The supervisor stopped at the attempt cap; live ingestion remains disabled and
+history/cooldown preserved. `action_authorized` remained false. Acceptance and
+normal-merge verification are recorded in [PR #2](https://github.com/Joefear/Defiant-Sky/pull/2).
+This limited evidence does not calibrate thresholds or validate detection accuracy.
+Any further provider access requires separate owner authorization.
 
 ## Offline verification and reproducible sample
 
